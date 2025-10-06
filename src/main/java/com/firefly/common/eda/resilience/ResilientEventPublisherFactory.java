@@ -20,10 +20,13 @@ import com.firefly.common.eda.properties.EdaProperties;
 import com.firefly.common.eda.publisher.EventPublisher;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
 import io.github.resilience4j.ratelimiter.RateLimiter;
 import io.github.resilience4j.ratelimiter.RateLimiterConfig;
+import io.github.resilience4j.ratelimiter.RateLimiterRegistry;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -41,6 +44,9 @@ import org.springframework.stereotype.Component;
 public class ResilientEventPublisherFactory {
 
     private final EdaProperties edaProperties;
+    private final CircuitBreakerRegistry circuitBreakerRegistry;
+    private final RetryRegistry retryRegistry;
+    private final RateLimiterRegistry rateLimiterRegistry;
 
     /**
      * Creates a resilient wrapper around the given publisher.
@@ -98,7 +104,8 @@ public class ResilientEventPublisherFactory {
                 .permittedNumberOfCallsInHalfOpenState(config.getPermittedNumberOfCallsInHalfOpenState())
                 .build();
 
-        return CircuitBreaker.of("eda-publisher-" + name, circuitBreakerConfig);
+        String circuitBreakerName = "eda-publisher-" + name;
+        return circuitBreakerRegistry.circuitBreaker(circuitBreakerName, circuitBreakerConfig);
     }
 
     /**
@@ -111,7 +118,8 @@ public class ResilientEventPublisherFactory {
                 .retryExceptions(Exception.class) // Retry on all exceptions
                 .build();
 
-        return Retry.of("eda-publisher-" + name, retryConfig);
+        String retryName = "eda-publisher-" + name;
+        return retryRegistry.retry(retryName, retryConfig);
     }
 
     /**
@@ -124,6 +132,7 @@ public class ResilientEventPublisherFactory {
                 .timeoutDuration(config.getTimeoutDuration())
                 .build();
 
-        return RateLimiter.of("eda-publisher-" + name, rateLimiterConfig);
+        String rateLimiterName = "eda-publisher-" + name;
+        return rateLimiterRegistry.rateLimiter(rateLimiterName, rateLimiterConfig);
     }
 }

@@ -103,21 +103,36 @@ public class EventPublisherFactory {
      * @return the event publisher with custom default destination or null if not available
      */
     public EventPublisher getPublisherWithDestination(PublisherType publisherType, String connectionId, String customDefaultDestination) {
+        // Validate input parameters
+        if (publisherType == null) {
+            log.warn("Publisher type cannot be null");
+            return null;
+        }
+
+        // If no custom destination provided, return standard publisher
         if (customDefaultDestination == null || customDefaultDestination.trim().isEmpty()) {
             log.debug("No custom destination provided, returning standard publisher");
             return getPublisher(publisherType, connectionId);
         }
 
+        // Validate destination length (reasonable limit to prevent memory issues)
+        String trimmedDestination = customDefaultDestination.trim();
+        if (trimmedDestination.length() > 1000) {
+            log.warn("Custom destination is very long ({} characters), this may cause issues: {}",
+                    trimmedDestination.length(), trimmedDestination.substring(0, 50) + "...");
+        }
+
         // Get the base publisher
         EventPublisher basePublisher = getPublisher(publisherType, connectionId);
         if (basePublisher == null) {
+            log.debug("Base publisher not available for type={}, connectionId={}", publisherType, connectionId);
             return null;
         }
 
         // Wrap with destination-aware publisher
         log.debug("Creating destination-aware publisher: type={}, connectionId={}, customDestination={}",
-                 publisherType, connectionId, customDefaultDestination);
-        return new DestinationAwarePublisher(basePublisher, customDefaultDestination);
+                 publisherType, connectionId, trimmedDestination);
+        return new DestinationAwarePublisher(basePublisher, trimmedDestination);
     }
 
     /**

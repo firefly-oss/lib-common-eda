@@ -106,15 +106,32 @@ public class DestinationAwarePublisher implements EventPublisher {
      * @return the effective destination to use
      */
     private String resolveDestination(String requestedDestination) {
-        if (requestedDestination != null && !requestedDestination.trim().isEmpty()) {
-            return requestedDestination;
+        // Check for explicit destination first
+        if (isValidDestination(requestedDestination)) {
+            log.trace("Using explicit destination: {}", requestedDestination);
+            return requestedDestination.trim();
         }
-        
-        if (customDefaultDestination != null && !customDefaultDestination.trim().isEmpty()) {
-            return customDefaultDestination;
+
+        // Fall back to custom default destination
+        if (isValidDestination(customDefaultDestination)) {
+            log.trace("Using custom default destination: {}", customDefaultDestination);
+            return customDefaultDestination.trim();
         }
-        
-        return delegate.getDefaultDestination();
+
+        // Final fallback to delegate's default destination
+        String delegateDefault = delegate.getDefaultDestination();
+        log.trace("Using delegate default destination: {}", delegateDefault);
+        return delegateDefault;
+    }
+
+    /**
+     * Validates if a destination string is valid (not null, not empty, not just whitespace).
+     *
+     * @param destination the destination to validate
+     * @return true if the destination is valid
+     */
+    private boolean isValidDestination(String destination) {
+        return destination != null && !destination.trim().isEmpty();
     }
 
     /**
