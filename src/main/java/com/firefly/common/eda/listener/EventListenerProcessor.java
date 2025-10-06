@@ -25,6 +25,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -50,6 +51,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 @RequiredArgsConstructor
 @Slf4j
+@Lazy
 public class EventListenerProcessor {
 
     private final ApplicationContext applicationContext;
@@ -61,13 +63,26 @@ public class EventListenerProcessor {
 
     // Cache for retry attempts per event
     private final Map<String, Integer> retryAttempts = new ConcurrentHashMap<>();
-    
-    @PostConstruct
-    public void initialize() {
-        log.info("Initializing EventListenerProcessor");
-        discoverEventListeners();
-        log.info("EventListenerProcessor initialized with {} event type mappings and {} topic mappings", 
-                listenerCache.size(), topicListenerCache.size());
+
+    // Flag to track if listeners have been discovered
+    private volatile boolean listenersDiscovered = false;
+
+    /**
+     * Lazy initialization of event listeners to avoid circular dependencies.
+     * This method is called on first use rather than during bean construction.
+     */
+    private void ensureListenersDiscovered() {
+        if (!listenersDiscovered) {
+            synchronized (this) {
+                if (!listenersDiscovered) {
+                    log.info("Initializing EventListenerProcessor");
+                    discoverEventListeners();
+                    listenersDiscovered = true;
+                    log.info("EventListenerProcessor initialized with {} event type mappings and {} topic mappings",
+                            listenerCache.size(), topicListenerCache.size());
+                }
+            }
+        }
     }
 
     /**
@@ -82,6 +97,9 @@ public class EventListenerProcessor {
             log.warn("Received null event, skipping processing");
             return Mono.empty();
         }
+
+        // Ensure listeners are discovered before processing
+        ensureListenersDiscovered();
 
         log.debug("Processing event: {} with headers: {}", event.getClass().getSimpleName(), headers);
 
