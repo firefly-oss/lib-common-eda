@@ -19,6 +19,7 @@ package com.firefly.common.eda.serialization;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -31,6 +32,7 @@ import java.nio.charset.StandardCharsets;
  * It provides good human readability and wide compatibility.
  */
 @Component
+@Primary
 @RequiredArgsConstructor
 public class JsonMessageSerializer implements MessageSerializer {
 
