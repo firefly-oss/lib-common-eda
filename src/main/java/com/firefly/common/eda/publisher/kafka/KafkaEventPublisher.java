@@ -17,6 +17,7 @@
 package com.firefly.common.eda.publisher.kafka;
 
 import com.firefly.common.eda.annotation.PublisherType;
+import com.firefly.common.eda.properties.EdaProperties;
 import com.firefly.common.eda.publisher.ConnectionAwarePublisher;
 import com.firefly.common.eda.publisher.EventPublisher;
 import com.firefly.common.eda.publisher.PublisherHealth;
@@ -58,6 +59,7 @@ public class KafkaEventPublisher implements EventPublisher, ConnectionAwarePubli
 
     private final ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider;
     private final MessageSerializer messageSerializer;
+    private final EdaProperties edaProperties;
     private String connectionId = "default";
 
     @Override
@@ -168,6 +170,13 @@ public class KafkaEventPublisher implements EventPublisher, ConnectionAwarePubli
     @Override
     public boolean isAvailable() {
         return kafkaTemplateProvider.getIfAvailable() != null;
+    }
+
+    @Override
+    public String getDefaultDestination() {
+        EdaProperties.Publishers.KafkaConfig config =
+            (EdaProperties.Publishers.KafkaConfig) edaProperties.getPublisherConfig(PublisherType.KAFKA, connectionId);
+        return config != null ? config.getDefaultTopic() : "events";
     }
 
     /**

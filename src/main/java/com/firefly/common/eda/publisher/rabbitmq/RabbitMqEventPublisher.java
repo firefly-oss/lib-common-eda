@@ -17,6 +17,7 @@
 package com.firefly.common.eda.publisher.rabbitmq;
 
 import com.firefly.common.eda.annotation.PublisherType;
+import com.firefly.common.eda.properties.EdaProperties;
 import com.firefly.common.eda.publisher.ConnectionAwarePublisher;
 import com.firefly.common.eda.publisher.EventPublisher;
 import com.firefly.common.eda.publisher.PublisherHealth;
@@ -59,6 +60,7 @@ public class RabbitMqEventPublisher implements EventPublisher, ConnectionAwarePu
     private final AmqpTemplate amqpTemplate;
     private final ConnectionFactory connectionFactory;
     private final MessageSerializer messageSerializer;
+    private final EdaProperties edaProperties;
     private String connectionId;
 
     @Override
@@ -183,5 +185,12 @@ public class RabbitMqEventPublisher implements EventPublisher, ConnectionAwarePu
             log.debug("RabbitMQ availability check failed: {}", e.getMessage());
             return false;
         }
+    }
+
+    @Override
+    public String getDefaultDestination() {
+        EdaProperties.Publishers.RabbitMqConfig config =
+            (EdaProperties.Publishers.RabbitMqConfig) edaProperties.getPublisherConfig(PublisherType.RABBITMQ, connectionId);
+        return config != null ? config.getDefaultExchange() : "events";
     }
 }
