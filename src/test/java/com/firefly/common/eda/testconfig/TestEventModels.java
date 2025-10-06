@@ -148,6 +148,8 @@ public class TestEventModels {
         private String email;
         private String username;
         private Instant registeredAt;
+        private String tenantId;
+        private boolean premium;
 
         public UserRegisteredEvent() {
         }
@@ -157,6 +159,15 @@ public class TestEventModels {
             this.email = email;
             this.username = username;
             this.registeredAt = registeredAt;
+        }
+
+        public UserRegisteredEvent(String userId, String email, String username, Instant registeredAt, String tenantId, boolean premium) {
+            this.userId = userId;
+            this.email = email;
+            this.username = username;
+            this.registeredAt = registeredAt;
+            this.tenantId = tenantId;
+            this.premium = premium;
         }
 
         public String getUserId() {
@@ -191,8 +202,77 @@ public class TestEventModels {
             this.registeredAt = registeredAt;
         }
 
+        public String getTenantId() {
+            return tenantId;
+        }
+
+        public void setTenantId(String tenantId) {
+            this.tenantId = tenantId;
+        }
+
+        public boolean isPremium() {
+            return premium;
+        }
+
+        public void setPremium(boolean premium) {
+            this.premium = premium;
+        }
+
         public static UserRegisteredEvent create(String email, String username) {
             return new UserRegisteredEvent(UUID.randomUUID().toString(), email, username, Instant.now());
+        }
+
+        public static Builder builder() {
+            return new Builder();
+        }
+
+        public static class Builder {
+            private String userId;
+            private String email;
+            private String username;
+            private Instant registeredAt;
+            private String tenantId;
+            private boolean premium;
+
+            public Builder userId(String userId) {
+                this.userId = userId;
+                return this;
+            }
+
+            public Builder email(String email) {
+                this.email = email;
+                return this;
+            }
+
+            public Builder username(String username) {
+                this.username = username;
+                return this;
+            }
+
+            public Builder registeredAt(Instant registeredAt) {
+                this.registeredAt = registeredAt;
+                return this;
+            }
+
+            public Builder tenantId(String tenantId) {
+                this.tenantId = tenantId;
+                return this;
+            }
+
+            public Builder premium(boolean premium) {
+                this.premium = premium;
+                return this;
+            }
+
+            public UserRegisteredEvent build() {
+                if (userId == null) {
+                    userId = UUID.randomUUID().toString();
+                }
+                if (registeredAt == null) {
+                    registeredAt = Instant.now();
+                }
+                return new UserRegisteredEvent(userId, email, username, registeredAt, tenantId, premium);
+            }
         }
     }
 
