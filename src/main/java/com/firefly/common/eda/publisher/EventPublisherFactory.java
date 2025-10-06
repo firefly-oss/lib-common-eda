@@ -77,6 +77,50 @@ public class EventPublisherFactory {
     }
 
     /**
+     * Gets an event publisher with a custom default destination that overrides application properties.
+     * <p>
+     * This method allows dynamic topic/destination selection at runtime. The returned publisher
+     * will use the specified destination as its default when no explicit destination is provided
+     * to the publish methods.
+     *
+     * @param publisherType the publisher type
+     * @param customDefaultDestination the custom default destination (topic, queue, exchange, etc.)
+     * @return the event publisher with custom default destination or null if not available
+     */
+    public EventPublisher getPublisherWithDestination(PublisherType publisherType, String customDefaultDestination) {
+        return getPublisherWithDestination(publisherType, null, customDefaultDestination);
+    }
+
+    /**
+     * Gets an event publisher with a custom default destination and specific connection ID.
+     * <p>
+     * This method provides the most flexibility, allowing both connection-specific configuration
+     * and dynamic destination override.
+     *
+     * @param publisherType the publisher type
+     * @param connectionId the connection ID (null for default)
+     * @param customDefaultDestination the custom default destination (topic, queue, exchange, etc.)
+     * @return the event publisher with custom default destination or null if not available
+     */
+    public EventPublisher getPublisherWithDestination(PublisherType publisherType, String connectionId, String customDefaultDestination) {
+        if (customDefaultDestination == null || customDefaultDestination.trim().isEmpty()) {
+            log.debug("No custom destination provided, returning standard publisher");
+            return getPublisher(publisherType, connectionId);
+        }
+
+        // Get the base publisher
+        EventPublisher basePublisher = getPublisher(publisherType, connectionId);
+        if (basePublisher == null) {
+            return null;
+        }
+
+        // Wrap with destination-aware publisher
+        log.debug("Creating destination-aware publisher: type={}, connectionId={}, customDestination={}",
+                 publisherType, connectionId, customDefaultDestination);
+        return new DestinationAwarePublisher(basePublisher, customDefaultDestination);
+    }
+
+    /**
      * Gets all available publishers with their types.
      *
      * @return map of publisher types to publisher instances
@@ -235,6 +279,20 @@ public class EventPublisherFactory {
     public EventPublisher getDefaultPublisher() {
         PublisherType defaultType = edaProperties.getDefaultPublisherType();
         return getPublisher(defaultType, edaProperties.getDefaultConnectionId());
+    }
+
+    /**
+     * Gets the default publisher with a custom default destination.
+     * <p>
+     * This is a convenience method that uses the configured default publisher type
+     * and connection ID but overrides the default destination.
+     *
+     * @param customDefaultDestination the custom default destination
+     * @return the default publisher with custom destination
+     */
+    public EventPublisher getDefaultPublisherWithDestination(String customDefaultDestination) {
+        PublisherType defaultType = edaProperties.getDefaultPublisherType();
+        return getPublisherWithDestination(defaultType, edaProperties.getDefaultConnectionId(), customDefaultDestination);
     }
 
     /**
