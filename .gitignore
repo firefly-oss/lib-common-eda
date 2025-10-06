@@ -22,3 +22,18 @@
 # virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
 hs_err_pid*
 replay_pid*
+
+# IntelliJ IDEA
+.idea/
+*.iml
+out/
+
+# Build directories
+target/
+**/target/
+build/
+
+# Additional Maven patterns added Fri Aug 29 20:30:00 CEST 2025
+**/target/generated-sources/
+**/target/generated-test-sources/
+**/target/generated-resources/
