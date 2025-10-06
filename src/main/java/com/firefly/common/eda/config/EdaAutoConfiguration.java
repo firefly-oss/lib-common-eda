@@ -38,6 +38,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
+import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 
@@ -66,6 +67,7 @@ import java.util.Map;
 @ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(EdaProperties.class)
 @ComponentScan(basePackages = "com.firefly.common.eda")
+@EnableAsync
 @Slf4j
 public class EdaAutoConfiguration {
 

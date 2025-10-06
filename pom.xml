@@ -119,6 +119,31 @@
             <optional>true</optional>
         </dependency>
 
+        <!-- Serialization Dependencies (Optional) -->
+        <!-- Apache Avro for binary serialization -->
+        <dependency>
+            <groupId>org.apache.avro</groupId>
+            <artifactId>avro</artifactId>
+            <version>1.11.3</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Google Protocol Buffers for binary serialization -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java</artifactId>
+            <version>3.25.1</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Protocol Buffers JSON utilities -->
+        <dependency>
+            <groupId>com.google.protobuf</groupId>
+            <artifactId>protobuf-java-util</artifactId>
+            <version>3.25.1</version>
+            <optional>true</optional>
+        </dependency>
+
 
         <!-- Test Dependencies -->
         <dependency>
