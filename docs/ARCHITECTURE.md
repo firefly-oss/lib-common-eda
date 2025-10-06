@@ -48,11 +48,11 @@ The Firefly EDA Library implements a **Layered Architecture** with clear separat
                                 ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                 Platform Adapter Layer                      │
-├───────────┬───────────┬─────────────┬─────────────────────────┤
-│   Kafka   │ RabbitMQ  │Spring Events│         NOOP            │
-│Publishers │Publishers │Publishers   │       Publishers        │
-│Consumers  │Consumers  │Consumers    │                         │
-└───────────┴───────────┴─────────────┴─────────────────────────┘
+├───────────┬───────────┬─────────────┬───────────────────────┤
+│   Kafka   │ RabbitMQ  │Spring Events│         NOOP          │
+│Publishers │Publishers │Publishers   │       Publishers      │
+│Consumers  │Consumers  │Consumers    │                       │
+└───────────┴───────────┴─────────────┴───────────────────────┘
 ```
 
 ## Architecture Principles

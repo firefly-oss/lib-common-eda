@@ -201,7 +201,7 @@ public class OrderEventHandler {
 | **Apache Kafka** | ✅ | ✅ | High-throughput, partitioning, persistence, ordering |
 | **RabbitMQ** | ✅ | ✅ | Advanced routing, flexible exchanges, guaranteed delivery |
 | **Spring Events** | ✅ | ✅ | In-memory, synchronous processing, testing |
-| **NOOP** | ✅ | ❌ | Testing/disabled mode |
+| **NOOP** | ✅ | ✅ | Testing/disabled mode |
 
 ## Architecture
 
