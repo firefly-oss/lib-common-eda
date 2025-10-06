@@ -28,6 +28,7 @@
   - [@PublishResult Annotation](#publishresult-annotation-features)
   - [Conditional Publishing](#conditional-publishing-with-spel)
   - [Dynamic Destinations](#dynamic-destinations-and-keys)
+  - [Dynamic Topic Selection](#dynamic-topic-selection-with-eventpublisherfactory)
   - [Error Publishing](#error-publishing)
 - [Event Listener Features](#event-listener-features)
   - [Basic Event Listening](#basic-event-listening)
@@ -82,6 +83,7 @@ The Firefly Event Driven Architecture (EDA) Library is a comprehensive, producti
 - **@PublishResult** annotation for declarative event publishing
 - **Conditional publishing** with SpEL-based business rules
 - **Dynamic destinations** and routing keys with runtime evaluation
+- **Dynamic topic selection** with EventPublisherFactory to override application properties
 - **Header propagation** and custom metadata support
 - **Comprehensive error handling** with multiple strategies
 
@@ -324,6 +326,80 @@ public Mono<Account> createAccount(CreateAccountRequest request) {
 }
 ```
 
+#### Dynamic Topic Selection with EventPublisherFactory
+
+The EventPublisherFactory supports dynamic topic/destination selection at runtime, allowing you to override the default destinations configured in application properties without modifying configuration files.
+
+**Key Features:**
+- Override default destinations at runtime
+- Support for all publisher types (Kafka, RabbitMQ, Spring Application Events)
+- Destination resolution priority: explicit destination > custom default > configured default
+- Maintains all publisher features (health checks, resilience, metrics)
+
+**Basic Usage:**
+```java
+@Service
+public class UserService {
+
+    private final EventPublisherFactory publisherFactory;
+
+    public void publishUserEvent(UserRegisteredEvent event, String tenantId) {
+        // Get publisher with custom default destination
+        EventPublisher publisher = publisherFactory.getPublisherWithDestination(
+            PublisherType.KAFKA,
+            "tenant-" + tenantId + "-user-events"
+        );
+
+        // Publish without specifying destination - uses custom default
+        publisher.publish(event, null).subscribe();
+
+        // Publish with explicit destination - overrides custom default
+        publisher.publish(event, "special-events").subscribe();
+    }
+}
+```
+
+**Multi-Service Architecture Example:**
+```java
+@Service
+public class EventRoutingService {
+
+    private final EventPublisherFactory publisherFactory;
+
+    public void routeEventsByService(Object event, String serviceType) {
+        // Create service-specific publishers
+        EventPublisher userPublisher = publisherFactory.getPublisherWithDestination(
+            PublisherType.KAFKA, "user-service-events");
+        EventPublisher orderPublisher = publisherFactory.getPublisherWithDestination(
+            PublisherType.KAFKA, "order-service-events");
+        EventPublisher auditPublisher = publisherFactory.getPublisherWithDestination(
+            PublisherType.KAFKA, "audit-events");
+
+        // Route to appropriate service topic
+        switch (serviceType) {
+            case "user" -> userPublisher.publish(event, null);
+            case "order" -> orderPublisher.publish(event, null);
+            default -> auditPublisher.publish(event, null);
+        }
+    }
+}
+```
+
+**Connection-Specific Destinations:**
+```java
+// Get publisher with specific connection and custom destination
+EventPublisher publisher = publisherFactory.getPublisherWithDestination(
+    PublisherType.KAFKA,
+    "secondary-cluster",  // connection ID
+    "high-priority-events" // custom destination
+);
+```
+
+**Available Methods:**
+- `getPublisherWithDestination(PublisherType, String customDestination)`
+- `getPublisherWithDestination(PublisherType, String connectionId, String customDestination)`
+- `getDefaultPublisherWithDestination(String customDestination)`
+
 #### Error Publishing
 ```java
 @PublishResult(
@@ -471,7 +547,7 @@ public class MultiPlatformEventHandler {
     // Spring Events consumer
     @EventListener(
         eventTypes = "internal.*",
-        consumerType = PublisherType.SPRING_EVENTS
+        consumerType = PublisherType.APPLICATION_EVENT
     )
     public Mono<Void> handleSpringEvents(EventEnvelope envelope) {
         return processInternalEvent(envelope);

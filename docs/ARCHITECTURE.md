@@ -474,7 +474,7 @@ public class CustomEventPublisher implements EventPublisher {
     
     @Override
     public PublisherType getPublisherType() {
-        return PublisherType.CUSTOM; // Add to enum
+        return PublisherType.NOOP; // Use existing enum value for custom implementations
     }
 }
 ```
