@@ -24,11 +24,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.springframework.amqp.core.AmqpAdmin;
-import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
-import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.amqp.rabbit.core.RabbitAdmin;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -65,7 +60,6 @@ import java.util.Map;
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
-@ConditionalOnClass({AmqpAdmin.class, RabbitTemplate.class})
 @EnableConfigurationProperties(EdaProperties.class)
 @ComponentScan(basePackages = "com.firefly.common.eda")
 @EnableAsync
@@ -207,61 +201,5 @@ public class EdaAutoConfiguration {
         return factory;
     }
 
-    /**
-     * Creates a RabbitMQ ConnectionFactory from Firefly EDA properties when:
-     * - RabbitMQ classes are available on classpath
-     * - No existing ConnectionFactory bean exists
-     * - Host is configured in Firefly EDA properties
-     */
-    @Bean
-    @ConditionalOnClass(name = "org.springframework.amqp.rabbit.core.RabbitTemplate")
-    @ConditionalOnMissingBean(ConnectionFactory.class)
-    @ConditionalOnProperty(prefix = "firefly.eda.publishers.rabbitmq.default", name = "host")
-    public org.springframework.amqp.rabbit.connection.ConnectionFactory rabbitConnectionFactory(EdaProperties props) {
-        log.debug("Creating RabbitMQ ConnectionFactory from Firefly EDA properties");
-        EdaProperties.Publishers.RabbitMqConfig rabbitProps = props.getPublishers().getRabbitmq().get("default");
-        
-        CachingConnectionFactory factory = new CachingConnectionFactory();
-        
-        // Configure connection properties from Firefly configuration
-        factory.setHost(rabbitProps.getHost());
-        factory.setPort(rabbitProps.getPort());
-        log.info("   • Host: {}:{}", rabbitProps.getHost(), rabbitProps.getPort());
-        factory.setUsername(rabbitProps.getUsername());
-        factory.setPassword(rabbitProps.getPassword());
-        factory.setVirtualHost(rabbitProps.getVirtualHost());
-        
-        return factory;
-    }
-
-    /**
-     * Creates a RabbitTemplate from Firefly-created ConnectionFactory when:
-     * - RabbitMQ classes are available on classpath
-     * - No existing RabbitTemplate bean exists
-     * - ConnectionFactory is available (either user-provided or Firefly-created)
-     */
-    @Bean
-    @ConditionalOnClass(name = "org.springframework.amqp.rabbit.core.RabbitTemplate")
-    @ConditionalOnMissingBean(name = "rabbitTemplate")
-    @ConditionalOnBean(org.springframework.amqp.rabbit.connection.ConnectionFactory.class)
-    public RabbitTemplate rabbitTemplate(org.springframework.amqp.rabbit.connection.ConnectionFactory connectionFactory) {
-        log.debug("Creating RabbitTemplate from ConnectionFactory");
-        return new RabbitTemplate(connectionFactory);
-    }
-
-    /**
-     * Creates a RabbitAdmin for managing RabbitMQ infrastructure when:
-     * - RabbitMQ classes are available on classpath
-     * - No existing AmqpAdmin bean exists
-     * - ConnectionFactory is available (either user-provided or Firefly-created)
-     */
-    @Bean
-    @ConditionalOnClass(name = "org.springframework.amqp.rabbit.core.RabbitAdmin")
-    @ConditionalOnMissingBean(AmqpAdmin.class)
-    @ConditionalOnBean(org.springframework.amqp.rabbit.connection.ConnectionFactory.class)
-    public AmqpAdmin amqpAdmin(org.springframework.amqp.rabbit.connection.ConnectionFactory connectionFactory) {
-        log.debug("Creating RabbitAdmin from ConnectionFactory");
-        return new RabbitAdmin(connectionFactory);
-    }
 
 }

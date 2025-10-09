@@ -52,7 +52,6 @@ import java.util.concurrent.CompletableFuture;
  */
 @Component
 @ConditionalOnClass(KafkaTemplate.class)
-@ConditionalOnBean(KafkaTemplate.class)
 @RequiredArgsConstructor
 @Slf4j
 public class KafkaEventPublisher implements EventPublisher, ConnectionAwarePublisher {
