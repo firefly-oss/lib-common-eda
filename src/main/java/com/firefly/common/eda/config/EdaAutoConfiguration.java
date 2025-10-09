@@ -65,6 +65,7 @@ import java.util.Map;
  */
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
+@ConditionalOnClass({AmqpAdmin.class, RabbitTemplate.class})
 @EnableConfigurationProperties(EdaProperties.class)
 @ComponentScan(basePackages = "com.firefly.common.eda")
 @EnableAsync
