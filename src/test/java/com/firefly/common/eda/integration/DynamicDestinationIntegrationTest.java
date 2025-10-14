@@ -196,9 +196,9 @@ class DynamicDestinationIntegrationTest extends BaseIntegrationTest {
     @Test
     @DisplayName("Should return null when requesting custom destination for unavailable publisher type")
     void shouldReturnNullWhenRequestingCustomDestinationForUnavailablePublisherType() {
-        // When
+        // When - Use RABBITMQ which is not available in test environment (KAFKA may be available)
         EventPublisher publisher = publisherFactory.getPublisherWithDestination(
-                PublisherType.KAFKA, "custom-kafka-topic"); // Kafka not available in this test
+                PublisherType.RABBITMQ, "custom-rabbitmq-topic"); // RabbitMQ not available in this test
 
         // Then
         assertThat(publisher).isNull();
