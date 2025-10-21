@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * and bridges them to the reactive streams API.
  */
 @Component
-@ConditionalOnProperty(prefix = "firefly.eda.consumers.application-event", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "firefly.eda.consumer.application-event", name = "enabled", havingValue = "true")
 @Slf4j
 public class SpringApplicationEventConsumer implements EventConsumer {
 

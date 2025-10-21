@@ -38,7 +38,7 @@ import java.util.Map;
  * All consume operations return empty streams and perform no actual work.
  */
 @Component
-@ConditionalOnProperty(prefix = "firefly.eda.consumers.noop", name = "enabled", havingValue = "true")
+@ConditionalOnProperty(prefix = "firefly.eda.consumer.noop", name = "enabled", havingValue = "true")
 @Slf4j
 public class NoopEventConsumer implements EventConsumer {
 

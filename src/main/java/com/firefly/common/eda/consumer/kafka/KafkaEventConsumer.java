@@ -187,8 +187,8 @@ public class KafkaEventConsumer implements EventConsumer {
      * Supports regex patterns (e.g., "test-.*" will match "test-topic-1", "test-topic-2", etc.)
      */
     @KafkaListener(
-            topicPattern = "${firefly.eda.consumers.kafka.default.topics:events}",
-            groupId = "${firefly.eda.consumers.kafka.default.group-id:firefly-eda}",
+            topicPattern = "${firefly.eda.consumer.kafka.default.topics:events}",
+            groupId = "${firefly.eda.consumer.group-id:firefly-eda}",
             containerFactory = "kafkaListenerContainerFactory"
     )
     public void handleKafkaMessage(ConsumerRecord<String, String> record) {
@@ -263,6 +263,10 @@ public class KafkaEventConsumer implements EventConsumer {
     private Map<String, Object> extractHeaders(ConsumerRecord<String, String> record) {
         Map<String, Object> headers = new HashMap<>();
 
+        // Add standard headers for EventListenerProcessor topic routing
+        headers.put("topic", record.topic());
+        headers.put("destination", record.topic());
+        
         // Add Kafka-specific headers
         headers.put("kafka.topic", record.topic());
         headers.put("kafka.partition", record.partition());
