@@ -727,7 +727,7 @@ firefly:
         initial-delay: 1s
         max-delay: 5m
         multiplier: 2.0
-        
+
       kafka:
         default:
           enabled: true
@@ -740,6 +740,27 @@ firefly:
             fetch.min.bytes: 1
             fetch.max.wait.ms: 500
             max.partition.fetch.bytes: 1048576
+
+      rabbitmq:
+        default:
+          enabled: true
+          host: localhost
+          port: 5672
+          username: guest
+          password: guest
+          virtual-host: /
+          queues: events-queue,notifications-queue
+          concurrent-consumers: 2
+          max-concurrent-consumers: 10
+          prefetch-count: 20
+          properties:
+            acknowledge-mode: auto
+
+      application-event:
+        enabled: true
+
+      noop:
+        enabled: false
 ```
 
 ### Resilience Configuration

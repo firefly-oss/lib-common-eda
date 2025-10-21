@@ -272,8 +272,54 @@ firefly:
           port: 5672
           username: guest
           password: guest
+          virtual-host: /
           default-exchange: events
-      
+          default-routing-key: event
+
+      application-event:
+        enabled: true
+        default-destination: application-events
+```
+
+### Consumer Configuration
+
+```yaml
+firefly:
+  eda:
+    consumer:
+      enabled: true  # Global consumer toggle
+      group-id: my-service-group
+      concurrency: 3
+
+      # Kafka consumer
+      kafka:
+        default:
+          enabled: true
+          bootstrap-servers: localhost:9092
+          topics: events
+          auto-offset-reset: earliest
+
+      # RabbitMQ consumer
+      rabbitmq:
+        default:
+          enabled: true
+          host: localhost
+          port: 5672
+          username: guest
+          password: guest
+          virtual-host: /
+          queues: events-queue
+          concurrent-consumers: 2
+          max-concurrent-consumers: 10
+          prefetch-count: 20
+
+      # Application Event consumer (in-memory)
+      application-event:
+        enabled: true
+
+      # NOOP consumer (for testing)
+      noop:
+        enabled: false
 ```
 
 ### Resilience Configuration

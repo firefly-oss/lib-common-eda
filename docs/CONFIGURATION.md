@@ -191,6 +191,11 @@ firefly:
       rabbitmq:
         default:
           enabled: true
+          host: "localhost"
+          port: 5672
+          username: "guest"
+          password: "guest"
+          virtual-host: "/"
           queues: "events-queue"
           concurrent-consumers: 1
           max-concurrent-consumers: 5
@@ -202,11 +207,48 @@ firefly:
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
 | `enabled` | boolean | `true` | Whether this RabbitMQ consumer is enabled |
+| `host` | string | `"localhost"` | RabbitMQ host |
+| `port` | int | `5672` | RabbitMQ port |
+| `username` | string | `"guest"` | RabbitMQ username |
+| `password` | string | `"guest"` | RabbitMQ password |
+| `virtual-host` | string | `"/"` | RabbitMQ virtual host |
 | `queues` | string | `"events-queue"` | Queues to consume (comma-separated) |
 | `concurrent-consumers` | int | `1` | Number of concurrent consumers |
 | `max-concurrent-consumers` | int | `5` | Maximum concurrent consumers |
 | `prefetch-count` | int | `10` | Message prefetch count |
 | `properties` | map | `{}` | Additional RabbitMQ consumer properties |
+
+### Application Event Consumer
+
+```yaml
+firefly:
+  eda:
+    consumer:
+      application-event:
+        enabled: true
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | boolean | `true` | Whether Application Event consumer is enabled |
+
+**Note:** Application Event consumer listens to Spring's internal event bus. It's enabled by default when the global consumer is enabled.
+
+### NOOP Consumer
+
+```yaml
+firefly:
+  eda:
+    consumer:
+      noop:
+        enabled: false
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | boolean | `false` | Whether NOOP consumer is enabled |
+
+**Note:** NOOP consumer is useful for testing scenarios where message consumption should be disabled.
 
 ## Resilience Configuration
 
@@ -344,8 +386,54 @@ firefly:
         multiplier: 3.0
       kafka:
         default:
+          bootstrap-servers: "localhost:9092"
           topics: "orders,payments,notifications"
           auto-offset-reset: "latest"
+```
+
+### Complete Multi-Consumer Setup
+
+```yaml
+firefly:
+  eda:
+    # Global consumer settings
+    consumer:
+      enabled: true
+      group-id: "my-service-group"
+      concurrency: 3
+
+      # Kafka consumer
+      kafka:
+        default:
+          enabled: true
+          bootstrap-servers: "localhost:9092"
+          topics: "events"
+          auto-offset-reset: "earliest"
+          properties:
+            enable.auto.commit: false
+            session.timeout.ms: 30000
+
+      # RabbitMQ consumer
+      rabbitmq:
+        default:
+          enabled: true
+          host: "localhost"
+          port: 5672
+          username: "guest"
+          password: "guest"
+          virtual-host: "/"
+          queues: "events-queue"
+          concurrent-consumers: 2
+          max-concurrent-consumers: 10
+          prefetch-count: 20
+
+      # Application Event consumer (in-memory)
+      application-event:
+        enabled: true
+
+      # NOOP consumer (for testing)
+      noop:
+        enabled: false
 ```
 
 ## Environment Variables

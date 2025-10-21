@@ -921,8 +921,53 @@ firefly:
           port: ${RABBITMQ_PORT:5672}
           username: ${RABBITMQ_USER:guest}
           password: ${RABBITMQ_PASS:guest}
+          virtual-host: /
           default-exchange: payment-exchange
-          
+          default-routing-key: payment
+
+      application-event:
+        enabled: true
+        default-destination: application-events
+
+    consumer:
+      enabled: true
+      group-id: my-service-group
+      concurrency: 5
+
+      kafka:
+        primary-kafka:
+          enabled: true
+          bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+          topics: events,orders,payments
+          auto-offset-reset: earliest
+          properties:
+            enable.auto.commit: false
+            session.timeout.ms: 30000
+
+        inventory-kafka:
+          enabled: true
+          bootstrap-servers: ${INVENTORY_KAFKA_BROKERS:localhost:9093}
+          topics: inventory-events
+          auto-offset-reset: latest
+
+      rabbitmq:
+        payments-rabbitmq:
+          enabled: true
+          host: ${RABBITMQ_HOST:localhost}
+          port: ${RABBITMQ_PORT:5672}
+          username: ${RABBITMQ_USER:guest}
+          password: ${RABBITMQ_PASS:guest}
+          virtual-host: /
+          queues: payment-queue,notification-queue
+          concurrent-consumers: 3
+          max-concurrent-consumers: 10
+          prefetch-count: 20
+
+      application-event:
+        enabled: true
+
+      noop:
+        enabled: false
 
 logging:
   level:
