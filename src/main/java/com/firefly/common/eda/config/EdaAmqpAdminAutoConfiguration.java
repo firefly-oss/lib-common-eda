@@ -9,8 +9,8 @@ import org.springframework.amqp.rabbit.core.RabbitAdmin;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -38,17 +38,18 @@ public class EdaAmqpAdminAutoConfiguration {
      * Creates a RabbitMQ ConnectionFactory from Firefly EDA properties when:
      * - RabbitMQ classes are available on classpath
      * - No existing ConnectionFactory bean exists
+     * - RabbitMQ publisher is enabled (defaults to true)
      * - Host is configured in Firefly EDA properties
      */
     @Bean
     @ConditionalOnMissingBean(ConnectionFactory.class)
-    @ConditionalOnProperty(prefix = "firefly.eda.publishers.rabbitmq.default", name = "host")
+    @ConditionalOnExpression("${firefly.eda.publishers.rabbitmq.default.enabled:true} && '${firefly.eda.publishers.rabbitmq.default.host:}'.length() > 0")
     public org.springframework.amqp.rabbit.connection.ConnectionFactory rabbitConnectionFactory(EdaProperties props) {
         log.debug("Creating RabbitMQ ConnectionFactory from Firefly EDA properties");
         EdaProperties.Publishers.RabbitMqConfig rabbitProps = props.getPublishers().getRabbitmq().get("default");
-        
+
         CachingConnectionFactory factory = new CachingConnectionFactory();
-        
+
         // Configure connection properties from Firefly configuration
         factory.setHost(rabbitProps.getHost());
         factory.setPort(rabbitProps.getPort());
@@ -56,7 +57,7 @@ public class EdaAmqpAdminAutoConfiguration {
         factory.setUsername(rabbitProps.getUsername());
         factory.setPassword(rabbitProps.getPassword());
         factory.setVirtualHost(rabbitProps.getVirtualHost());
-        
+
         return factory;
     }
 

@@ -24,9 +24,12 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -37,7 +40,6 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.kafka.core.*;
 import org.springframework.kafka.listener.ContainerProperties;
 
-import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -91,16 +93,18 @@ public class EdaAutoConfiguration {
      * Creates a Kafka ProducerFactory from Firefly EDA properties when:
      * - Kafka classes are available on classpath
      * - No existing ProducerFactory bean exists
+     * - Kafka publisher is enabled (defaults to true)
      * - Bootstrap servers are configured in Firefly EDA properties
      */
     @Bean
     @ConditionalOnClass(name = "org.springframework.kafka.core.KafkaTemplate")
     @ConditionalOnMissingBean(name = "kafkaProducerFactory")
-    @ConditionalOnProperty(prefix = "firefly.eda.publishers.kafka.default", name = "bootstrap-servers")
+    @ConditionalOnExpression("${firefly.eda.publishers.kafka.default.enabled:true} && '${firefly.eda.publishers.kafka.default.bootstrap-servers:}'.length() > 0")
     public ProducerFactory<String, Object> kafkaProducerFactory(EdaProperties props) {
         log.debug("Creating Kafka ProducerFactory from Firefly EDA properties");
+
         EdaProperties.Publishers.KafkaConfig kafkaProps = props.getPublishers().getKafka().get("default");
-        
+
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProps.getBootstrapServers());
         log.info("   • Bootstrap servers: {}", kafkaProps.getBootstrapServers());
@@ -141,17 +145,19 @@ public class EdaAutoConfiguration {
      * Creates a Kafka ConsumerFactory from Firefly EDA properties when:
      * - Kafka classes are available on classpath
      * - No existing ConsumerFactory bean exists
+     * - Consumer is globally enabled
+     * - Kafka consumer is enabled (defaults to true)
      * - Bootstrap servers are configured in Firefly EDA properties
-     * - Consumer is enabled
      */
     @Bean
     @ConditionalOnClass(name = "org.springframework.kafka.core.ConsumerFactory")
     @ConditionalOnMissingBean(name = "kafkaConsumerFactory")
-    @ConditionalOnProperty(prefix = "firefly.eda.consumer.kafka.default", name = "bootstrap-servers")
+    @ConditionalOnExpression("${firefly.eda.consumer.enabled:false} && ${firefly.eda.consumer.kafka.default.enabled:true} && '${firefly.eda.consumer.kafka.default.bootstrap-servers:}'.length() > 0")
     public ConsumerFactory<String, Object> kafkaConsumerFactory(EdaProperties props) {
         log.debug("Creating Kafka ConsumerFactory from Firefly EDA properties");
+
         EdaProperties.Consumer.KafkaConfig kafkaProps = props.getConsumer().getKafka().get("default");
-        
+
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProps.getBootstrapServers());
         configProps.put(ConsumerConfig.GROUP_ID_CONFIG, props.getConsumer().getGroupId());
@@ -201,5 +207,34 @@ public class EdaAutoConfiguration {
         return factory;
     }
 
+    /**
+     * Creates a RabbitMQ ConnectionFactory for consumers from Firefly EDA properties when:
+     * - RabbitMQ classes are available on classpath
+     * - No existing ConnectionFactory bean exists
+     * - Consumer is globally enabled
+     * - RabbitMQ consumer is enabled (defaults to true)
+     * - Host is configured in Firefly EDA properties
+     */
+    @Bean
+    @ConditionalOnClass(name = "org.springframework.amqp.rabbit.connection.ConnectionFactory")
+    @ConditionalOnMissingBean(ConnectionFactory.class)
+    @ConditionalOnExpression("${firefly.eda.consumer.enabled:false} && ${firefly.eda.consumer.rabbitmq.default.enabled:true} && '${firefly.eda.consumer.rabbitmq.default.host:}'.length() > 0")
+    public ConnectionFactory rabbitConsumerConnectionFactory(EdaProperties props) {
+        log.debug("Creating RabbitMQ ConnectionFactory for consumers from Firefly EDA properties");
+
+        EdaProperties.Consumer.RabbitMqConfig rabbitProps = props.getConsumer().getRabbitmq().get("default");
+
+        CachingConnectionFactory factory = new CachingConnectionFactory();
+
+        // Configure connection properties from Firefly configuration
+        factory.setHost(rabbitProps.getHost());
+        factory.setPort(rabbitProps.getPort());
+        log.info("   • Host: {}:{}", rabbitProps.getHost(), rabbitProps.getPort());
+        factory.setUsername(rabbitProps.getUsername());
+        factory.setPassword(rabbitProps.getPassword());
+        factory.setVirtualHost(rabbitProps.getVirtualHost());
+
+        return factory;
+    }
 
 }

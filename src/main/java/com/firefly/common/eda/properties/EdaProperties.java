@@ -219,7 +219,7 @@ public class EdaProperties {
     @Data
     public static class Consumer {
         /**
-         * Whether event consumers are enabled.
+         * Whether event consumers are enabled globally.
          */
         private boolean enabled = false;
 
@@ -242,6 +242,12 @@ public class EdaProperties {
         private final ConsumerRetry retry = new ConsumerRetry();
 
         /**
+         * Application Event consumer configuration.
+         */
+        @Valid
+        private final ApplicationEvent applicationEvent = new ApplicationEvent();
+
+        /**
          * Kafka consumer configurations by connection ID.
          */
         @Valid
@@ -252,6 +258,12 @@ public class EdaProperties {
          */
         @Valid
         private final Map<String, RabbitMqConfig> rabbitmq = new HashMap<>();
+
+        /**
+         * NOOP consumer configuration.
+         */
+        @Valid
+        private final Noop noop = new Noop();
 
         // Initialize default connections
         public Consumer() {
@@ -269,6 +281,11 @@ public class EdaProperties {
         }
 
         @Data
+        public static class ApplicationEvent {
+            private boolean enabled = true;
+        }
+
+        @Data
         public static class KafkaConfig {
             private boolean enabled = true;
             private String bootstrapServers;
@@ -282,11 +299,21 @@ public class EdaProperties {
         @Data
         public static class RabbitMqConfig {
             private boolean enabled = true;
+            private String host = "localhost";
+            private int port = 5672;
+            private String username = "guest";
+            private String password = "guest";
+            private String virtualHost = "/";
             private String queues = "events-queue";
             private int concurrentConsumers = 1;
             private int maxConcurrentConsumers = 5;
             private int prefetchCount = 10;
             private Map<String, Object> properties = new HashMap<>();
+        }
+
+        @Data
+        public static class Noop {
+            private boolean enabled = false;
         }
     }
 
