@@ -155,6 +155,8 @@ firefly:
 
 ### Kafka Consumer
 
+The Kafka consumer supports **dynamic topic subscription** from `@EventListener` annotations. If you have `@EventListener` methods with `consumerType=KAFKA` or `consumerType=AUTO`, the consumer will automatically subscribe to those topics. If no annotations are found, it falls back to the configured topics.
+
 ```yaml
 firefly:
   eda:
@@ -163,7 +165,7 @@ firefly:
         default:
           enabled: true
           bootstrap-servers: "localhost:9092"
-          topics: "events"
+          topics: "events"  # Fallback topics if no @EventListener annotations found
           auto-offset-reset: "earliest"
           key-deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
           value-deserializer: "org.apache.kafka.common.serialization.StringDeserializer"
@@ -176,13 +178,17 @@ firefly:
 |----------|------|---------|-------------|
 | `enabled` | boolean | `true` | Whether this Kafka consumer is enabled |
 | `bootstrap-servers` | string | `null` | Kafka bootstrap servers |
-| `topics` | string | `"events"` | Topics to consume (comma-separated) |
+| `topics` | string | `"events"` | Fallback topics to consume if no @EventListener annotations found (comma-separated, supports regex patterns) |
 | `auto-offset-reset` | string | `"earliest"` | Auto offset reset strategy |
 | `key-deserializer` | string | `StringDeserializer` | Kafka key deserializer class |
 | `value-deserializer` | string | `StringDeserializer` | Kafka value deserializer class |
 | `properties` | map | `{}` | Additional Kafka consumer properties |
 
+**Note**: The Kafka consumer will automatically discover topics from `@EventListener` annotations at startup. Wildcard patterns like `*` are converted to `.*` for regex compatibility.
+
 ### RabbitMQ Consumer
+
+Unlike Kafka, RabbitMQ consumers subscribe to **specific, pre-declared queues** configured in application properties. The `@EventListener` destinations for RabbitMQ are in the format `"exchange/routing-key"` and are used for message routing and filtering after consumption, not for queue subscription.
 
 ```yaml
 firefly:
@@ -196,7 +202,7 @@ firefly:
           username: "guest"
           password: "guest"
           virtual-host: "/"
-          queues: "events-queue"
+          queues: "events-queue"  # Required: specific queue names to subscribe to
           concurrent-consumers: 1
           max-concurrent-consumers: 5
           prefetch-count: 10
@@ -212,11 +218,13 @@ firefly:
 | `username` | string | `"guest"` | RabbitMQ username |
 | `password` | string | `"guest"` | RabbitMQ password |
 | `virtual-host` | string | `"/"` | RabbitMQ virtual host |
-| `queues` | string | `"events-queue"` | Queues to consume (comma-separated) |
+| `queues` | string | `"events-queue"` | **Required**: Specific queue names to consume (comma-separated, no wildcards) |
 | `concurrent-consumers` | int | `1` | Number of concurrent consumers |
 | `max-concurrent-consumers` | int | `5` | Maximum concurrent consumers |
 | `prefetch-count` | int | `10` | Message prefetch count |
 | `properties` | map | `{}` | Additional RabbitMQ consumer properties |
+
+**Important**: RabbitMQ queues must be pre-declared and configured here. The `@EventListener` destinations are used for filtering messages after they are consumed from these queues, not for determining which queues to subscribe to.
 
 ### Application Event Consumer
 
