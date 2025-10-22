@@ -434,7 +434,7 @@ public class EventListenerProcessor implements InitializingBean {
     private Mono<Void> invokeListener(EventListenerMethod listenerMethod, Object event, Map<String, Object> headers) {
         EventListener annotation = listenerMethod.getAnnotation();
 
-        Mono<Void> invocation = Mono.fromRunnable(() -> {
+        Mono<Void> invocation = Mono.defer(() -> {
             try {
                 log.debug("Invoking event listener: {}.{}",
                         listenerMethod.getBean().getClass().getSimpleName(),
@@ -444,19 +444,25 @@ public class EventListenerProcessor implements InitializingBean {
                 Object[] args = prepareArguments(listenerMethod.getMethod(), event, headers);
 
                 // Invoke the method
-                listenerMethod.getMethod().invoke(listenerMethod.getBean(), args);
+                Object result = listenerMethod.getMethod().invoke(listenerMethod.getBean(), args);
 
                 log.debug("Successfully invoked event listener: {}.{}",
                         listenerMethod.getBean().getClass().getSimpleName(),
                         listenerMethod.getMethod().getName());
 
+                // If the method returns a Mono, subscribe to it
+                if (result instanceof Mono) {
+                    return ((Mono<?>) result).then();
+                } else {
+                    return Mono.empty();
+                }
+
             } catch (Exception e) {
-                throw new RuntimeException("Event listener invocation failed", e);
+                return Mono.error(new RuntimeException("Event listener invocation failed", e));
             }
         })
         .subscribeOn(annotation.async() ? Schedulers.parallel() : Schedulers.immediate())
-        .timeout(Duration.ofMillis(annotation.timeoutMs() > 0 ? annotation.timeoutMs() : 30000))
-        .then();
+        .timeout(Duration.ofMillis(annotation.timeoutMs() > 0 ? annotation.timeoutMs() : 30000));
 
         // Apply retry logic if configured
         if (annotation.errorStrategy() == ErrorHandlingStrategy.LOG_AND_RETRY && annotation.maxRetries() > 0) {
