@@ -32,30 +32,31 @@ import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.MessageListenerContainer;
 import org.springframework.kafka.support.Acknowledgment;
-import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * Kafka event consumer implementation.
+ * Kafka event consumer implementation with dynamic topic subscription.
  * <p>
- * This consumer receives events from Apache Kafka topics and emits them
- * as a reactive stream for processing by application event handlers.
+ * This consumer dynamically subscribes to Kafka topics based on @EventListener annotations
+ * discovered by EventListenerProcessor. The topics are determined at runtime by scanning
+ * all @EventListener annotations with consumerType=KAFKA.
+ * <p>
+ * If no @EventListener annotations are found, it falls back to the configured default topic pattern.
  */
 @Component
 @ConditionalOnClass(KafkaTemplate.class)
 @ConditionalOnProperty(prefix = "firefly.eda.consumer", name = "enabled", havingValue = "true")
+@org.springframework.context.annotation.DependsOn("eventListenerProcessor")
 @Slf4j
 public class KafkaEventConsumer implements EventConsumer {
 
@@ -73,7 +74,48 @@ public class KafkaEventConsumer implements EventConsumer {
         this.edaProperties = edaProperties;
         this.eventListenerProcessor = eventListenerProcessor;
         this.messageSerializer = messageSerializer;
-        log.info("Initializing Kafka event consumer (without auto-start)");
+        log.info("Initializing Kafka event consumer with dynamic topic subscription");
+    }
+
+    /**
+     * Gets the topic pattern for Kafka listener.
+     * This method is called by Spring at startup to determine which topics to subscribe to.
+     * It dynamically builds the pattern based on discovered @EventListener annotations.
+     */
+    public String getTopicPattern() {
+        log.info("🔍 getTopicPattern() called - checking for @EventListener annotations...");
+
+        Set<String> topics = eventListenerProcessor.getTopicsForConsumerType("KAFKA");
+
+        log.info("📋 Found {} Kafka topics from @EventListener annotations: {}", topics.size(), topics);
+
+        if (topics.isEmpty()) {
+            log.warn("⚠️  No Kafka topics found from @EventListener annotations. " +
+                    "Using default topic pattern from configuration. " +
+                    "Make sure you have @EventListener annotations with consumerType=KAFKA or consumerType=AUTO");
+
+            // Fallback to configured default
+            String defaultTopics = edaProperties.getConsumer().getKafka().get("default").getTopics();
+            String pattern = defaultTopics != null ? defaultTopics : "events";
+            log.info("📌 Using fallback topic pattern: {}", pattern);
+            return pattern;
+        }
+
+        // Filter out wildcard-only patterns and convert them to proper regex
+        // Kafka topic patterns use regex, so "*" alone is invalid - convert to ".*"
+        Set<String> validTopics = topics.stream()
+                .map(topic -> {
+                    if ("*".equals(topic)) {
+                        log.debug("Converting wildcard '*' to regex '.*' for Kafka topic pattern");
+                        return ".*";
+                    }
+                    return topic;
+                })
+                .collect(java.util.stream.Collectors.toSet());
+
+        String topicPattern = String.join("|", validTopics);
+        log.info("🎯 Kafka consumer will subscribe to topics from @EventListener annotations: {}", topicPattern);
+        return topicPattern;
     }
 
     @Override
@@ -91,7 +133,7 @@ public class KafkaEventConsumer implements EventConsumer {
         return consume()
                 .filter(envelope -> {
                     if (destinations.length == 0) return true;
-                    return Arrays.stream(destinations)
+                    return java.util.Arrays.stream(destinations)
                             .anyMatch(dest -> dest.equals(envelope.destination()));
                 });
     }
@@ -169,6 +211,7 @@ public class KafkaEventConsumer implements EventConsumer {
         details.put("running", isRunning());
         details.put("enabled", edaProperties.getConsumer().isEnabled());
         details.put("groupId", edaProperties.getConsumer().getGroupId());
+        details.put("dynamicTopics", eventListenerProcessor.getTopicsForConsumerType("KAFKA"));
         
         return Mono.just(ConsumerHealth.builder()
                 .consumerType(getConsumerType())
@@ -180,14 +223,16 @@ public class KafkaEventConsumer implements EventConsumer {
     }
 
     /**
-     * Kafka listener method that receives messages and emits them to the reactive stream.
+     * Kafka listener method that receives messages from dynamically determined topics.
      * <p>
-     * This method is automatically called by Spring Kafka when messages are received.
-     * The topics are configured via application properties.
-     * Supports regex patterns (e.g., "test-.*" will match "test-topic-1", "test-topic-2", etc.)
+     * The topicPattern is built dynamically using SpEL to call getTopicPattern() method,
+     * which scans @EventListener annotations to determine which topics to subscribe to.
+     * <p>
+     * This approach works for all messaging providers - each consumer implementation
+     * can use its own mechanism to determine topics/queues/exchanges dynamically.
      */
     @KafkaListener(
-            topicPattern = "${firefly.eda.consumer.kafka.default.topics:events}",
+            topicPattern = "#{__listener.getTopicPattern()}",
             groupId = "${firefly.eda.consumer.group-id:firefly-eda}",
             containerFactory = "kafkaListenerContainerFactory"
     )
@@ -242,7 +287,7 @@ public class KafkaEventConsumer implements EventConsumer {
             Object deserializedEvent = deserializeEvent(payload, headers);
             log.debug("Deserialized event type: {}", deserializedEvent.getClass().getSimpleName());
 
-            // Process the event through EventListenerProcessor (like RabbitMQ does)
+            // Process the event through EventListenerProcessor
             eventListenerProcessor.processEvent(deserializedEvent, headers)
                     .doOnSuccess(v -> {
                         log.debug("✅ [Kafka Consumer] Successfully processed message #{} through EventListenerProcessor", messageNumber);
@@ -255,8 +300,6 @@ public class KafkaEventConsumer implements EventConsumer {
         } catch (Exception e) {
             log.error("❌ Error processing Kafka message #{}: topic={}, partition={}, offset={}, error={}",
                      messageNumber, topic, partition, offset, e.getMessage(), e);
-
-            // Message will be auto-acknowledged by RECORD mode even on error
         }
     }
 
@@ -283,21 +326,6 @@ public class KafkaEventConsumer implements EventConsumer {
                 headers.put(key, new String(value));
             }
         }
-
-        return headers;
-    }
-
-    private Map<String, Object> extractHeadersFromMessage(org.springframework.messaging.Message<String> message) {
-        Map<String, Object> headers = new HashMap<>();
-
-        // Extract all headers from Spring Message
-        message.getHeaders().forEach((key, value) -> {
-            if (value instanceof byte[]) {
-                headers.put(key, new String((byte[]) value));
-            } else {
-                headers.put(key, value);
-            }
-        });
 
         return headers;
     }
