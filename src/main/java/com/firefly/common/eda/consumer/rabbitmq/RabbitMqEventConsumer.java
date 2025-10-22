@@ -46,8 +46,19 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * RabbitMQ implementation of EventConsumer using Spring AMQP.
  * <p>
+ * This consumer subscribes to RabbitMQ queues configured in application properties.
+ * Unlike Kafka which can use dynamic topic patterns from @EventListener annotations,
+ * RabbitMQ consumers must subscribe to specific, pre-declared queues.
+ * <p>
+ * The @EventListener annotations are used for message routing and filtering after
+ * messages are consumed from the queues. The destinations in @EventListener for
+ * RabbitMQ are in the format "exchange/routing-key" which is used by publishers
+ * and for filtering, not for queue subscription.
+ * <p>
  * This consumer provides:
  * <ul>
+ *   <li>Queue subscription from application configuration</li>
+ *   <li>Message routing to @EventListener methods based on exchange/routing-key patterns</li>
  *   <li>Async message processing using reactor</li>
  *   <li>Event filtering support</li>
  *   <li>Health monitoring and metrics</li>
@@ -57,6 +68,8 @@ import java.util.concurrent.atomic.AtomicLong;
 @Component
 @ConditionalOnClass({SimpleMessageListenerContainer.class, ConnectionFactory.class})
 @org.springframework.boot.autoconfigure.condition.ConditionalOnBean(ConnectionFactory.class)
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "firefly.eda.consumer", name = "enabled", havingValue = "true")
+@org.springframework.context.annotation.DependsOn("eventListenerProcessor")
 @Slf4j
 public class RabbitMqEventConsumer implements EventConsumer {
 
@@ -78,16 +91,51 @@ public class RabbitMqEventConsumer implements EventConsumer {
         this.edaProperties = edaProperties;
         this.eventFilters = eventFilters != null ? eventFilters : java.util.Collections.emptyList();
     }
-    
+
     private SimpleMessageListenerContainer listenerContainer;
     private final AtomicLong messagesConsumed = new AtomicLong(0);
     private final AtomicLong messagesProcessed = new AtomicLong(0);
     private final AtomicLong messagesFailures = new AtomicLong(0);
 
+    /**
+     * Gets the queue names for RabbitMQ listener.
+     *
+     * For RabbitMQ, we use the configured queue names from application properties.
+     * Unlike Kafka which can use topic patterns from @EventListener annotations,
+     * RabbitMQ consumers must subscribe to specific, pre-declared queues.
+     *
+     * The @EventListener destinations for RabbitMQ are in the format "exchange/routing-key"
+     * which is used for routing messages, not for queue subscription. The actual queue
+     * subscription is determined by the infrastructure configuration.
+     *
+     * @return Array of queue names to subscribe to
+     */
+    public String[] getQueueNames() {
+        log.info("🔍 getQueueNames() called - using configured queues for RabbitMQ consumer");
+
+        // Get configured queues
+        EdaProperties.Consumer.RabbitMqConfig config = edaProperties.getConsumer()
+                .getRabbitmq()
+                .get("default");
+
+        if (config != null && config.getQueues() != null) {
+            String[] queues = config.getQueues().split(",");
+            for (int i = 0; i < queues.length; i++) {
+                queues[i] = queues[i].trim();
+            }
+            log.info("📌 RabbitMQ consumer will subscribe to configured queues: {}", String.join(", ", queues));
+            return queues;
+        }
+
+        // Ultimate fallback
+        log.info("📌 Using fallback queue: events-queue");
+        return new String[]{"events-queue"};
+    }
+
     @PostConstruct
     public void initialize() {
         try {
-            log.info("Initializing RabbitMQ event consumer (without auto-start)");
+            log.info("Initializing RabbitMQ event consumer with dynamic queue subscription (without auto-start)");
 
             // Get RabbitMQ consumer configuration
             EdaProperties.Consumer.RabbitMqConfig config = edaProperties.getConsumer()
@@ -115,11 +163,8 @@ public class RabbitMqEventConsumer implements EventConsumer {
             listenerContainer.setDeclarationRetries(5);
             listenerContainer.setFailedDeclarationRetryInterval(5000L); // 5 seconds
 
-            // Configure queue names from properties
-            String[] queueNames = config.getQueues().split(",");
-            for (int i = 0; i < queueNames.length; i++) {
-                queueNames[i] = queueNames[i].trim();
-            }
+            // Get queue names dynamically from @EventListener annotations
+            String[] queueNames = getQueueNames();
             listenerContainer.setQueueNames(queueNames);
 
             log.info("RabbitMQ event consumer configured with queues: {}", String.join(", ", queueNames));
