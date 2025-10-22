@@ -20,8 +20,9 @@ import com.firefly.common.eda.annotation.ErrorHandlingStrategy;
 import com.firefly.common.eda.annotation.EventListener;
 import com.firefly.common.eda.annotation.PublisherType;
 import com.firefly.common.eda.error.CustomErrorHandlerRegistry;
+import com.firefly.common.eda.event.EventEnvelope;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.SmartInitializingSingleton;
+import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
@@ -49,13 +50,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * Spring's ApplicationEventPublisher for dead letter queue functionality
  * instead of directly depending on EventPublisherFactory.
  * <p>
- * Uses SmartInitializingSingleton to defer bean discovery until after
- * all singleton beans have been fully initialized, preventing circular
- * dependency issues.
+ * Uses InitializingBean to initialize event listeners early in the bean lifecycle,
+ * before other beans (like KafkaEventConsumer) need to query the discovered listeners.
  */
 @Component
 @Slf4j
-public class EventListenerProcessor implements SmartInitializingSingleton {
+public class EventListenerProcessor implements InitializingBean {
 
     private final ApplicationContext applicationContext;
     private final ApplicationEventPublisher applicationEventPublisher;
@@ -77,18 +77,19 @@ public class EventListenerProcessor implements SmartInitializingSingleton {
     }
 
     /**
-     * Initialize event listeners after all singleton beans have been fully initialized.
-     * This implementation of SmartInitializingSingleton ensures that bean discovery
-     * happens after all dependencies are resolved, preventing circular dependency issues.
+     * Initialize event listeners after bean properties have been set.
+     * This implementation of InitializingBean ensures that event listeners are discovered
+     * early in the bean lifecycle, before other beans (like KafkaEventConsumer) need to
+     * query the discovered listeners.
      */
     @Override
-    public void afterSingletonsInstantiated() {
+    public void afterPropertiesSet() {
         initializeEventListeners();
     }
 
     /**
      * Public method to initialize event listeners.
-     * Used both by the SmartInitializingSingleton callback and for testing.
+     * Used both by the InitializingBean callback and for testing.
      */
     public void initializeEventListeners() {
         log.info("Initializing EventListenerProcessor");
@@ -96,6 +97,45 @@ public class EventListenerProcessor implements SmartInitializingSingleton {
         log.info("EventListenerProcessor initialized with {} event type mappings and {} topic mappings",
                 listenerCache.size(), topicListenerCache.size());
     }
+    /**
+     * Gets all topics/destinations registered from @EventListener annotations.
+     * This is used by Kafka consumer to dynamically subscribe to topics.
+     *
+     * @return Set of all registered topic names
+     */
+    public java.util.Set<String> getAllRegisteredTopics() {
+        return new java.util.HashSet<>(topicListenerCache.keySet());
+    }
+
+    /**
+     * Gets all topics/destinations registered from @EventListener annotations for a specific consumer type.
+     *
+     * @param consumerType the consumer type (e.g., "KAFKA", "RABBITMQ")
+     * @return Set of topic names for the specified consumer type
+     */
+    public java.util.Set<String> getTopicsForConsumerType(String consumerType) {
+        log.debug("🔍 getTopicsForConsumerType({}) called - topicListenerCache has {} entries",
+                 consumerType, topicListenerCache.size());
+
+        java.util.Set<String> topics = new java.util.HashSet<>();
+
+        topicListenerCache.forEach((topic, listeners) -> {
+            log.debug("  Checking topic '{}' with {} listeners", topic, listeners.size());
+            for (EventListenerMethod listener : listeners) {
+                com.firefly.common.eda.annotation.PublisherType type = listener.getAnnotation().consumerType();
+                log.debug("    Listener consumerType: {}", type != null ? type.name() : "null");
+                if (type != null && (type.name().equals(consumerType) || type.name().equals("AUTO"))) {
+                    topics.add(topic);
+                    log.debug("    ✅ Added topic '{}' for consumerType {}", topic, consumerType);
+                    break; // Found at least one listener for this topic with matching consumer type
+                }
+            }
+        });
+
+        log.debug("📋 Returning {} topics for consumerType {}: {}", topics.size(), consumerType, topics);
+        return topics;
+    }
+
 
     /**
      * Processes an event by finding and invoking appropriate event listeners.
@@ -441,20 +481,42 @@ public class EventListenerProcessor implements SmartInitializingSingleton {
     private Object[] prepareArguments(Method method, Object event, Map<String, Object> headers) {
         Class<?>[] paramTypes = method.getParameterTypes();
         Object[] args = new Object[paramTypes.length];
-        
+
         for (int i = 0; i < paramTypes.length; i++) {
             Class<?> paramType = paramTypes[i];
-            
-            if (paramType.isAssignableFrom(event.getClass())) {
+
+            // Check if parameter expects EventEnvelope
+            if (paramType == EventEnvelope.class || paramType.isAssignableFrom(EventEnvelope.class)) {
+                // Create EventEnvelope wrapping the event with headers
+                String destination = (String) headers.getOrDefault("destination", "unknown");
+                String eventType = event.getClass().getSimpleName();
+                String consumerType = (String) headers.getOrDefault("consumer_type", "KAFKA");
+
+                args[i] = new EventEnvelope(
+                        destination,
+                        eventType,
+                        event,
+                        (String) headers.get("transactionId"),
+                        headers,
+                        EventEnvelope.EventMetadata.empty(),
+                        java.time.Instant.now(),
+                        null, // publisherType
+                        consumerType,
+                        (String) headers.getOrDefault("connection_id", "default"),
+                        null  // ackCallback
+                );
+            } else if (paramType.isAssignableFrom(event.getClass())) {
+                // Direct event object
                 args[i] = event;
             } else if (paramType == Map.class || paramType.isAssignableFrom(Map.class)) {
+                // Headers map
                 args[i] = headers;
             } else {
                 // Try to extract from headers by parameter name or type
                 args[i] = null; // Default to null for unmatched parameters
             }
         }
-        
+
         return args;
     }
 
