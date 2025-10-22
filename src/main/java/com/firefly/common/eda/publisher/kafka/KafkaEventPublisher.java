@@ -65,7 +65,9 @@ public class KafkaEventPublisher implements EventPublisher, ConnectionAwarePubli
     public Mono<Void> publish(Object event, String destination, Map<String, Object> headers) {
         return Mono.fromCallable(() -> {
             try {
-                log.debug("Publishing event to Kafka topic: {}", destination);
+                // Use default destination if none provided
+                String effectiveDestination = destination != null ? destination : getDefaultDestination();
+                log.debug("Publishing event to Kafka topic: {}", effectiveDestination);
 
                 KafkaTemplate<String, Object> kafkaTemplate = kafkaTemplateProvider.getIfAvailable();
                 if (kafkaTemplate == null) {
@@ -78,7 +80,7 @@ public class KafkaEventPublisher implements EventPublisher, ConnectionAwarePubli
 
                 // Create producer record
                 String key = extractPartitionKey(headers, event);
-                ProducerRecord<String, Object> record = new ProducerRecord<>(destination, key, serializedEvent);
+                ProducerRecord<String, Object> record = new ProducerRecord<>(effectiveDestination, key, serializedEvent);
 
                 // Add headers to Kafka record
                 addKafkaHeaders(record, headers, event);

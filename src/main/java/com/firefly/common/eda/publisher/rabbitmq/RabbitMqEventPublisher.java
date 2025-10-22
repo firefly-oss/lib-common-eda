@@ -82,7 +82,9 @@ public class RabbitMqEventPublisher implements EventPublisher, ConnectionAwarePu
     public Mono<Void> publish(Object event, String destination, Map<String, Object> headers) {
         return Mono.fromRunnable(() -> {
             try {
-                log.info("📤 [RabbitMQ Publisher] Publishing event to destination: {}", destination);
+                // Use default destination if none provided
+                String effectiveDestination = destination != null ? destination : getDefaultDestination();
+                log.info("📤 [RabbitMQ Publisher] Publishing event to destination: {}", effectiveDestination);
                 log.debug("Event type: {}, Headers: {}", event.getClass().getSimpleName(), headers);
 
                 // Serialize the event
@@ -91,7 +93,7 @@ public class RabbitMqEventPublisher implements EventPublisher, ConnectionAwarePu
 
                 // Convert destination to exchange and routing key
                 // Format: "exchange/routingKey" or just "exchange" (empty routing key)
-                String[] parts = destination.split("/", 2);
+                String[] parts = effectiveDestination.split("/", 2);
                 String exchange = parts[0];
                 String routingKey = parts.length > 1 ? parts[1] : "";
 
