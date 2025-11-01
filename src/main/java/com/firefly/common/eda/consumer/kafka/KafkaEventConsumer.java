@@ -56,6 +56,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 @Component
 @ConditionalOnClass(KafkaTemplate.class)
 @ConditionalOnProperty(prefix = "firefly.eda.consumer", name = "enabled", havingValue = "true")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnBean(name = "fireflyEdaKafkaListenerContainerFactory")
 @org.springframework.context.annotation.DependsOn("eventListenerProcessor")
 @Slf4j
 public class KafkaEventConsumer implements EventConsumer {
@@ -75,6 +76,10 @@ public class KafkaEventConsumer implements EventConsumer {
         this.eventListenerProcessor = eventListenerProcessor;
         this.messageSerializer = messageSerializer;
         log.info("Initializing Kafka event consumer with dynamic topic subscription");
+        
+        // Register callback to refresh topics when dynamic listeners are added
+        eventListenerProcessor.registerListenerChangeCallback(this::refreshTopics);
+        log.info("Registered topic refresh callback with EventListenerProcessor");
     }
 
     /**
@@ -109,9 +114,17 @@ public class KafkaEventConsumer implements EventConsumer {
                         log.debug("Converting wildcard '*' to regex '.*' for Kafka topic pattern");
                         return ".*";
                     }
-                    return topic;
+                    // Escape special regex characters in topic names
+                    return topic.replace(".", "\\.");
                 })
+                .filter(topic -> !topic.isEmpty()) // Remove empty topics
                 .collect(java.util.stream.Collectors.toSet());
+
+        if (validTopics.isEmpty()) {
+            // If no valid topics, return a pattern that matches nothing (but is valid regex)
+            log.warn("⚠️  No valid topics found, using non-matching pattern");
+            return "$^";
+        }
 
         String topicPattern = String.join("|", validTopics);
         log.info("🎯 Kafka consumer will subscribe to topics from @EventListener annotations: {}", topicPattern);
@@ -189,6 +202,45 @@ public class KafkaEventConsumer implements EventConsumer {
             }
         });
     }
+    
+    /**
+     * Refreshes the topic subscriptions by restarting the Kafka listener containers.
+     * <p>
+     * This is called when new dynamic listeners are registered to ensure they are
+     * picked up by the Kafka consumer.
+     * <p>
+     * Note: This will cause a brief interruption in message consumption.
+     */
+    public void refreshTopics() {
+        log.info("🔄 Refreshing Kafka topic subscriptions...");
+        
+        if (kafkaListenerEndpointRegistry == null) {
+            log.warn("Cannot refresh topics - KafkaListenerEndpointRegistry not available");
+            return;
+        }
+        
+        // Get current topics before restart
+        Set<String> newTopics = eventListenerProcessor.getTopicsForConsumerType("KAFKA");
+        log.info("📋 New topic set: {}", newTopics);
+        
+        // Restart all containers to pick up new topic pattern
+        kafkaListenerEndpointRegistry.getAllListenerContainers().forEach(container -> {
+            String listenerId = container.getListenerId();
+            log.info("Restarting Kafka listener container: {}", listenerId);
+            
+            // Stop the container
+            if (container.isRunning()) {
+                container.stop();
+            }
+            
+            // Start it again - this will re-evaluate the topic pattern
+            container.start();
+            
+            log.info("✅ Restarted container: {}", listenerId);
+        });
+        
+        log.info("✅ Kafka topic subscriptions refreshed successfully");
+    }
 
     @Override
     public boolean isRunning() {
@@ -230,11 +282,13 @@ public class KafkaEventConsumer implements EventConsumer {
      * <p>
      * This approach works for all messaging providers - each consumer implementation
      * can use its own mechanism to determine topics/queues/exchanges dynamically.
+     * <p>
+     * <strong>Uses:</strong> fireflyEdaKafkaListenerContainerFactory bean created by Firefly EDA auto-configuration
      */
     @KafkaListener(
             topicPattern = "#{__listener.getTopicPattern()}",
             groupId = "${firefly.eda.consumer.group-id:firefly-eda}",
-            containerFactory = "kafkaListenerContainerFactory"
+            containerFactory = "fireflyEdaKafkaListenerContainerFactory"
     )
     public void handleKafkaMessage(ConsumerRecord<String, String> record) {
         int messageNumber = messageCounter.incrementAndGet();

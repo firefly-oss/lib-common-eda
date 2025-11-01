@@ -52,7 +52,6 @@ import java.util.concurrent.CompletableFuture;
  */
 @Component
 @ConditionalOnClass(KafkaTemplate.class)
-@RequiredArgsConstructor
 @Slf4j
 public class KafkaEventPublisher implements EventPublisher, ConnectionAwarePublisher {
 
@@ -60,6 +59,16 @@ public class KafkaEventPublisher implements EventPublisher, ConnectionAwarePubli
     private final MessageSerializer messageSerializer;
     private final EdaProperties edaProperties;
     private String connectionId = "default";
+
+    public KafkaEventPublisher(
+            @org.springframework.beans.factory.annotation.Qualifier("fireflyEdaKafkaTemplate")
+            ObjectProvider<KafkaTemplate<String, Object>> kafkaTemplateProvider,
+            MessageSerializer messageSerializer,
+            EdaProperties edaProperties) {
+        this.kafkaTemplateProvider = kafkaTemplateProvider;
+        this.messageSerializer = messageSerializer;
+        this.edaProperties = edaProperties;
+    }
 
     @Override
     public Mono<Void> publish(Object event, String destination, Map<String, Object> headers) {

@@ -67,7 +67,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 @Component
 @ConditionalOnClass({SimpleMessageListenerContainer.class, ConnectionFactory.class})
-@org.springframework.boot.autoconfigure.condition.ConditionalOnBean(ConnectionFactory.class)
+@org.springframework.boot.autoconfigure.condition.ConditionalOnBean(name = "fireflyEdaRabbitConsumerConnectionFactory")
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(prefix = "firefly.eda.consumer", name = "enabled", havingValue = "true")
 @org.springframework.context.annotation.DependsOn("eventListenerProcessor")
 @Slf4j
@@ -80,6 +80,7 @@ public class RabbitMqEventConsumer implements EventConsumer {
     private final List<EventFilter> eventFilters;
 
     public RabbitMqEventConsumer(
+            @org.springframework.beans.factory.annotation.Qualifier("fireflyEdaRabbitConsumerConnectionFactory")
             ConnectionFactory connectionFactory,
             MessageSerializer messageSerializer,
             EventListenerProcessor eventListenerProcessor,

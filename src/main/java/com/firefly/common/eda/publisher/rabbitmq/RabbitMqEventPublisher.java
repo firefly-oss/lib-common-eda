@@ -52,8 +52,7 @@ import java.util.Map;
  */
 @Component
 @ConditionalOnClass({AmqpTemplate.class, ConnectionFactory.class})
-@ConditionalOnBean(AmqpTemplate.class)
-@RequiredArgsConstructor
+@ConditionalOnBean(name = "fireflyEdaRabbitTemplate")
 @Slf4j
 public class RabbitMqEventPublisher implements EventPublisher, ConnectionAwarePublisher {
 
@@ -62,6 +61,19 @@ public class RabbitMqEventPublisher implements EventPublisher, ConnectionAwarePu
     private final MessageSerializer messageSerializer;
     private final EdaProperties edaProperties;
     private String connectionId;
+
+    public RabbitMqEventPublisher(
+            @org.springframework.beans.factory.annotation.Qualifier("fireflyEdaRabbitTemplate")
+            AmqpTemplate amqpTemplate,
+            @org.springframework.beans.factory.annotation.Qualifier("fireflyEdaRabbitPublisherConnectionFactory")
+            ConnectionFactory connectionFactory,
+            MessageSerializer messageSerializer,
+            EdaProperties edaProperties) {
+        this.amqpTemplate = amqpTemplate;
+        this.connectionFactory = connectionFactory;
+        this.messageSerializer = messageSerializer;
+        this.edaProperties = edaProperties;
+    }
 
     @Override
     public PublisherType getPublisherType() {
