@@ -25,6 +25,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.kafka.core.DefaultKafkaProducerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -51,7 +53,8 @@ import java.util.Map;
 @Slf4j
 @AutoConfiguration(after = FireflyEdaAutoConfiguration.class)
 @ConditionalOnClass(name = "org.springframework.kafka.core.KafkaTemplate")
-@ConditionalOnBean(EdaProperties.class)
+@ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
+@EnableConfigurationProperties(EdaProperties.class)
 public class FireflyEdaKafkaPublisherAutoConfiguration {
 
     public FireflyEdaKafkaPublisherAutoConfiguration(EdaProperties props) {
@@ -82,7 +85,7 @@ public class FireflyEdaKafkaPublisherAutoConfiguration {
      */
     @Bean(name = "fireflyEdaKafkaProducerFactory")
     @ConditionalOnMissingBean(name = "fireflyEdaKafkaProducerFactory")
-    @ConditionalOnExpression("${firefly.eda.publishers.enabled:false} && ${firefly.eda.publishers.kafka.default.enabled:true} && '${firefly.eda.publishers.kafka.default.bootstrap-servers:}'.length() > 0")
+    @ConditionalOnExpression("${firefly.eda.publishers.enabled:false} && ${firefly.eda.publishers.kafka.default.enabled:false} && '${firefly.eda.publishers.kafka.default.bootstrap-servers:}'.length() > 0")
     public ProducerFactory<String, Object> fireflyEdaKafkaProducerFactory(EdaProperties props) {
         log.info("Creating Kafka ProducerFactory from firefly.eda.publishers.kafka.default.* properties");
 

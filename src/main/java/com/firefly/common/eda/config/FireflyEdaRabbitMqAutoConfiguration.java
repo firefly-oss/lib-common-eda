@@ -10,6 +10,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 
@@ -31,7 +32,8 @@ import org.springframework.context.annotation.Bean;
  */
 @AutoConfiguration(after = FireflyEdaAutoConfiguration.class)
 @ConditionalOnClass({RabbitTemplate.class})
-@ConditionalOnBean(EdaProperties.class)
+@ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
+@EnableConfigurationProperties(EdaProperties.class)
 @Slf4j
 public class FireflyEdaRabbitMqAutoConfiguration {
 
@@ -64,7 +66,7 @@ public class FireflyEdaRabbitMqAutoConfiguration {
      */
     @Bean(name = "fireflyEdaRabbitPublisherConnectionFactory")
     @ConditionalOnMissingBean(name = "fireflyEdaRabbitPublisherConnectionFactory")
-    @ConditionalOnExpression("${firefly.eda.publishers.enabled:false} && ${firefly.eda.publishers.rabbitmq.default.enabled:true} && '${firefly.eda.publishers.rabbitmq.default.host:}'.length() > 0")
+    @ConditionalOnExpression("${firefly.eda.publishers.enabled:false} && ${firefly.eda.publishers.rabbitmq.default.enabled:false} && '${firefly.eda.publishers.rabbitmq.default.host:}'.length() > 0")
     public org.springframework.amqp.rabbit.connection.ConnectionFactory fireflyEdaRabbitPublisherConnectionFactory(EdaProperties props) {
         log.info("Creating RabbitMQ ConnectionFactory for publishers from firefly.eda.publishers.rabbitmq.default.* properties");
         EdaProperties.Publishers.RabbitMqConfig rabbitProps = props.getPublishers().getRabbitmq().get("default");

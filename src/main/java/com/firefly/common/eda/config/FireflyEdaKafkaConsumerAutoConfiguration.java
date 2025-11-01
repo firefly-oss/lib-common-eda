@@ -25,6 +25,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Primary;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
@@ -52,7 +54,8 @@ import java.util.Map;
 @Slf4j
 @AutoConfiguration(after = FireflyEdaAutoConfiguration.class)
 @ConditionalOnClass(name = "org.springframework.kafka.core.ConsumerFactory")
-@ConditionalOnBean(EdaProperties.class)
+@ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
+@EnableConfigurationProperties(EdaProperties.class)
 public class FireflyEdaKafkaConsumerAutoConfiguration {
 
     public FireflyEdaKafkaConsumerAutoConfiguration(EdaProperties props) {
@@ -84,7 +87,7 @@ public class FireflyEdaKafkaConsumerAutoConfiguration {
     @Bean(name = "fireflyEdaKafkaConsumerFactory")
     @Primary
     @ConditionalOnMissingBean(name = "fireflyEdaKafkaConsumerFactory")
-    @ConditionalOnExpression("${firefly.eda.consumer.enabled:false} && ${firefly.eda.consumer.kafka.default.enabled:true} && '${firefly.eda.consumer.kafka.default.bootstrap-servers:}'.length() > 0")
+    @ConditionalOnExpression("${firefly.eda.consumer.enabled:false} && ${firefly.eda.consumer.kafka.default.enabled:false} && '${firefly.eda.consumer.kafka.default.bootstrap-servers:}'.length() > 0")
     public ConsumerFactory<String, Object> fireflyEdaKafkaConsumerFactory(EdaProperties props) {
         log.info("Creating Kafka ConsumerFactory from firefly.eda.consumer.kafka.default.* properties");
 
