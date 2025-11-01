@@ -85,16 +85,17 @@ public class SpelExpressionEvaluator {
      * @param <T> the type of the result
      * @return the evaluated value, or null if expression is empty or evaluation fails
      */
-    public <T> T evaluateExpression(String expressionString, Method method, Object[] args, 
+    public <T> T evaluateExpression(String expressionString, Method method, Object[] args,
                                     Object result, Class<T> expectedType) {
         if (expressionString == null || expressionString.trim().isEmpty()) {
             return null;
         }
 
+        // Remove SpEL delimiters if present (#{...})
+        String cleanExpression = cleanExpression(expressionString);
+        log.debug("Evaluating SpEL: original='{}', clean='{}'", expressionString, cleanExpression);
+
         try {
-            // Remove SpEL delimiters if present (#{...})
-            String cleanExpression = cleanExpression(expressionString);
-            
             // Get or parse expression
             Expression expression = expressionCache.computeIfAbsent(cleanExpression, parser::parseExpression);
             
@@ -220,26 +221,109 @@ public class SpelExpressionEvaluator {
     }
 
     /**
-     * Removes SpEL delimiters from expression string.
+     * Removes SpEL delimiters from expression string and converts to proper SpEL syntax.
+     * Handles expressions like:
+     * - "#{#result.tenantId}-user-events" -> "#result.tenantId + '-user-events'"
+     * - "#{#param0.id}" -> "#param0.id"
+     * - "#result.id" -> "#result.id" (already clean)
+     * - "static-text" -> "'static-text'" (literal string)
      */
     private String cleanExpression(String expression) {
         if (expression == null) {
             return null;
         }
-        
+
         String trimmed = expression.trim();
-        
-        // Remove #{...} delimiters
-        if (trimmed.startsWith("#{") && trimmed.endsWith("}")) {
-            return trimmed.substring(2, trimmed.length() - 1);
+
+        // If it's a simple SpEL expression without delimiters, return as-is
+        if (trimmed.startsWith("#") && !trimmed.startsWith("#{") && !trimmed.startsWith("${")) {
+            return trimmed;
         }
-        
-        // Remove ${...} delimiters (property placeholders)
-        if (trimmed.startsWith("${") && trimmed.endsWith("}")) {
-            return trimmed.substring(2, trimmed.length() - 1);
+
+        // If it contains #{...}, replace all occurrences
+        if (trimmed.contains("#{")) {
+            return replaceSpelDelimiters(trimmed);
         }
-        
+
+        // If it contains ${...}, replace all occurrences (property placeholders)
+        if (trimmed.contains("${")) {
+            return replacePropertyPlaceholders(trimmed);
+        }
+
+        // If it doesn't contain any SpEL markers, treat as literal string
+        if (!trimmed.contains("#") && !trimmed.contains("$")) {
+            return "'" + trimmed + "'";
+        }
+
         return trimmed;
+    }
+
+    /**
+     * Replaces all #{...} delimiters with their content and converts to proper SpEL.
+     * Example: "#{#result.tenantId}-user-events" -> "#result.tenantId + '-user-events'"
+     */
+    private String replaceSpelDelimiters(String expression) {
+        StringBuilder result = new StringBuilder();
+        int pos = 0;
+
+        while (pos < expression.length()) {
+            int start = expression.indexOf("#{", pos);
+            if (start == -1) {
+                // No more #{...}, append the rest
+                String remaining = expression.substring(pos);
+                if (!remaining.isEmpty()) {
+                    if (result.length() > 0) {
+                        result.append(" + '").append(remaining).append("'");
+                    } else {
+                        result.append("'").append(remaining).append("'");
+                    }
+                }
+                break;
+            }
+
+            // Append literal text before #{
+            if (start > pos) {
+                String literal = expression.substring(pos, start);
+                if (result.length() > 0) {
+                    result.append(" + '").append(literal).append("'");
+                } else {
+                    result.append("'").append(literal).append("'");
+                }
+            }
+
+            // Find matching }
+            int end = expression.indexOf("}", start + 2);
+            if (end == -1) {
+                // No matching }, treat rest as literal
+                String remaining = expression.substring(start);
+                if (result.length() > 0) {
+                    result.append(" + '").append(remaining).append("'");
+                } else {
+                    result.append("'").append(remaining).append("'");
+                }
+                break;
+            }
+
+            // Extract SpEL expression
+            String spelExpr = expression.substring(start + 2, end);
+            if (result.length() > 0) {
+                result.append(" + ").append(spelExpr);
+            } else {
+                result.append(spelExpr);
+            }
+
+            pos = end + 1;
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Replaces all ${...} property placeholders.
+     */
+    private String replacePropertyPlaceholders(String expression) {
+        // For now, just remove the delimiters
+        return expression.replaceAll("\\$\\{([^}]+)\\}", "$1");
     }
 
     /**

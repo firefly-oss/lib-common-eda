@@ -163,6 +163,11 @@ public class EdaProperties {
     @Data
     public static class Publishers {
         /**
+         * Whether event publishers are enabled globally.
+         */
+        private boolean enabled = false;
+
+        /**
          * Application Event publisher configuration.
          */
         @Valid
