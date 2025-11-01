@@ -18,7 +18,7 @@ package com.firefly.common.eda.aspect;
 
 import com.firefly.common.eda.annotation.EventPublisher;
 import com.firefly.common.eda.annotation.PublisherType;
-import com.firefly.common.eda.integration.BaseIntegrationTest;
+import com.firefly.common.eda.testconfig.BaseIntegrationTest;
 import lombok.Builder;
 import lombok.Data;
 import org.junit.jupiter.api.DisplayName;
@@ -287,14 +287,16 @@ class EventPublisherAspectIntegrationTest extends BaseIntegrationTest {
         private final List<Object> capturedMaps = new CopyOnWriteArrayList<>();
 
         @EventListener
-        public void captureCommand(CreateUserCommand command) {
-            capturedCommands.add(command);
-        }
-
-        @EventListener
-        public void captureMap(Map<?, ?> map) {
-            if (map.containsKey("param0") || map.containsKey("param1")) {
-                capturedMaps.add(map);
+        public void captureEvent(com.firefly.common.eda.event.EventEnvelope envelope) {
+            // Extract the payload from the envelope
+            Object payload = envelope.payload();
+            if (payload instanceof CreateUserCommand) {
+                capturedCommands.add(payload);
+            } else if (payload instanceof Map) {
+                Map<?, ?> map = (Map<?, ?>) payload;
+                if (map.containsKey("param0") || map.containsKey("param1")) {
+                    capturedMaps.add(map);
+                }
             }
         }
 

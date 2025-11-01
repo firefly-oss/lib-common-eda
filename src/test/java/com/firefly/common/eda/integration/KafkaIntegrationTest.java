@@ -85,13 +85,14 @@ class KafkaIntegrationTest extends BaseIntegrationTest {
 
     @DynamicPropertySource
     static void kafkaProperties(DynamicPropertyRegistry registry) {
+        // Configure ONLY through firefly.eda.* properties - NO spring.kafka.* properties
+        // This ensures 100% hexagonal architecture with no direct Spring Kafka configuration
         registry.add("firefly.eda.publishers.kafka.default.enabled", () -> "true");
         registry.add("firefly.eda.publishers.kafka.default.bootstrap-servers", kafka::getBootstrapServers);
         registry.add("firefly.eda.publishers.kafka.default.default-topic", () -> "test-events");
-        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("spring.kafka.producer.key-serializer", 
+        registry.add("firefly.eda.publishers.kafka.default.key-serializer",
                 () -> "org.apache.kafka.common.serialization.StringSerializer");
-        registry.add("spring.kafka.producer.value-serializer", 
+        registry.add("firefly.eda.publishers.kafka.default.value-serializer",
                 () -> "org.apache.kafka.common.serialization.StringSerializer");
     }
 

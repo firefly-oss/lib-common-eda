@@ -88,6 +88,9 @@ class RabbitMqConsumerIntegrationTest extends BaseIntegrationTest {
 
     @DynamicPropertySource
     static void rabbitMqProperties(DynamicPropertyRegistry registry) {
+        // Configure ONLY through firefly.eda.* properties - NO spring.rabbitmq.* properties
+        // This ensures 100% hexagonal architecture with no direct Spring RabbitMQ configuration
+
         // RabbitMQ Publisher configuration
         registry.add("firefly.eda.publishers.rabbitmq.default.enabled", () -> "true");
         registry.add("firefly.eda.publishers.rabbitmq.default.host", rabbitmq::getHost);
@@ -96,15 +99,13 @@ class RabbitMqConsumerIntegrationTest extends BaseIntegrationTest {
         registry.add("firefly.eda.publishers.rabbitmq.default.password", rabbitmq::getAdminPassword);
         registry.add("firefly.eda.publishers.rabbitmq.default.default-exchange", () -> "test-exchange");
 
-        // Spring RabbitMQ configuration (for consumer)
-        registry.add("spring.rabbitmq.host", rabbitmq::getHost);
-        registry.add("spring.rabbitmq.port", rabbitmq::getAmqpPort);
-        registry.add("spring.rabbitmq.username", rabbitmq::getAdminUsername);
-        registry.add("spring.rabbitmq.password", rabbitmq::getAdminPassword);
-
-        // Consumer configuration
+        // RabbitMQ Consumer configuration
         registry.add("firefly.eda.consumer.enabled", () -> "true");
         registry.add("firefly.eda.consumer.rabbitmq.default.enabled", () -> "true");
+        registry.add("firefly.eda.consumer.rabbitmq.default.host", rabbitmq::getHost);
+        registry.add("firefly.eda.consumer.rabbitmq.default.port", rabbitmq::getAmqpPort);
+        registry.add("firefly.eda.consumer.rabbitmq.default.username", rabbitmq::getAdminUsername);
+        registry.add("firefly.eda.consumer.rabbitmq.default.password", rabbitmq::getAdminPassword);
         registry.add("firefly.eda.consumer.rabbitmq.default.queues", () -> "test-events-queue");
         registry.add("firefly.eda.consumer.rabbitmq.default.concurrent-consumers", () -> "1");
         registry.add("firefly.eda.consumer.rabbitmq.default.max-concurrent-consumers", () -> "5");

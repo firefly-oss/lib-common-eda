@@ -52,11 +52,11 @@ class EdaAutoConfigurationTest {
     private ApplicationContext applicationContext;
 
     @Test
-    @DisplayName("Should create EdaAutoConfiguration bean")
-    void shouldCreateEdaAutoConfigurationBean() {
+    @DisplayName("Should create FireflyEdaAutoConfiguration bean")
+    void shouldCreateFireflyEdaAutoConfigurationBean() {
         // Assert
-        assertThat(applicationContext.containsBean("edaAutoConfiguration")).isTrue();
-        EdaAutoConfiguration config = applicationContext.getBean(EdaAutoConfiguration.class);
+        assertThat(applicationContext.containsBean("fireflyEdaAutoConfiguration")).isTrue();
+        FireflyEdaAutoConfiguration config = applicationContext.getBean(FireflyEdaAutoConfiguration.class);
         assertThat(config).isNotNull();
     }
 

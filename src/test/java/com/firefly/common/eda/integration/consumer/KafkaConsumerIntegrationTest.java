@@ -100,16 +100,19 @@ class KafkaConsumerIntegrationTest extends BaseIntegrationTest {
 
         // Consumer configuration - ENABLED with regex pattern
         // Using regex pattern "test-consumer-topic-.*" to match topics like "test-consumer-topic-1", "test-consumer-topic-2", etc.
+        // Configure ONLY through firefly.eda.* properties - NO spring.kafka.* properties
+        // This ensures 100% hexagonal architecture with no direct Spring Kafka configuration
         registry.add("firefly.eda.consumer.enabled", () -> "true");
-        registry.add("firefly.eda.consumers.kafka.default.enabled", () -> "true");
-        registry.add("firefly.eda.consumers.kafka.default.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("firefly.eda.consumers.kafka.default.group-id", () -> "firefly-eda");
-        registry.add("firefly.eda.consumers.kafka.default.topics", () -> "test-consumer-topic-.*");
-        registry.add("firefly.eda.consumers.kafka.default.auto-offset-reset", () -> "earliest");
+        registry.add("firefly.eda.consumer.group-id", () -> "firefly-eda");
+        registry.add("firefly.eda.consumer.kafka.default.enabled", () -> "true");
+        registry.add("firefly.eda.consumer.kafka.default.bootstrap-servers", kafka::getBootstrapServers);
+        registry.add("firefly.eda.consumer.kafka.default.topics", () -> "test-consumer-topic-.*");
+        registry.add("firefly.eda.consumer.kafka.default.auto-offset-reset", () -> "earliest");
 
         // Configure Kafka consumer to update metadata more frequently for pattern subscriptions
-        registry.add("spring.kafka.consumer.properties.metadata.max.age.ms", () -> "500");
-        registry.add("spring.kafka.consumer.properties.fetch.max.wait.ms", () -> "500");
+        // Using firefly.eda properties map to pass Kafka-specific properties
+        registry.add("firefly.eda.consumer.kafka.default.properties.metadata.max.age.ms", () -> "500");
+        registry.add("firefly.eda.consumer.kafka.default.properties.fetch.max.wait.ms", () -> "500");
     }
 
     private String testTopic;

@@ -28,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.env.Environment;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -59,6 +60,9 @@ class EventListenerProcessorTest {
     @Mock
     private CustomErrorHandlerRegistry customErrorHandlerRegistry;
 
+    @Mock
+    private Environment environment;
+
     private EventListenerProcessor eventListenerProcessor;
     private TestEventListenerBean testBean;
 
@@ -71,8 +75,11 @@ class EventListenerProcessorTest {
         when(applicationContext.getBean("testBean"))
             .thenReturn(testBean);
 
+        // Mock environment to resolve placeholders (lenient because not all tests use it)
+        lenient().when(environment.resolvePlaceholders(any())).thenAnswer(invocation -> invocation.getArgument(0));
+
         eventListenerProcessor = new EventListenerProcessor(
-            applicationContext, applicationEventPublisher, customErrorHandlerRegistry
+            applicationContext, applicationEventPublisher, customErrorHandlerRegistry, environment
         );
     }
 

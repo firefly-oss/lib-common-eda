@@ -18,7 +18,7 @@ package com.firefly.common.eda.aspect;
 
 import com.firefly.common.eda.annotation.PublishResult;
 import com.firefly.common.eda.annotation.PublisherType;
-import com.firefly.common.eda.integration.BaseIntegrationTest;
+import com.firefly.common.eda.testconfig.BaseIntegrationTest;
 import lombok.Builder;
 import lombok.Data;
 import org.junit.jupiter.api.DisplayName;
@@ -248,8 +248,11 @@ class PublishResultAspectIntegrationTest extends BaseIntegrationTest {
         private final List<Object> capturedEvents = new CopyOnWriteArrayList<>();
 
         @EventListener
-        public void captureEvent(UserCreatedEvent event) {
-            capturedEvents.add(event);
+        public void captureEvent(com.firefly.common.eda.event.EventEnvelope envelope) {
+            // Extract the payload from the envelope
+            if (envelope.payload() instanceof UserCreatedEvent) {
+                capturedEvents.add(envelope.payload());
+            }
         }
 
         public List<Object> getCapturedEvents() {
