@@ -191,7 +191,7 @@ public class PublishResultAspect {
         }).onErrorResume(error -> {
             if (publishResult.publishOnError()) {
                 return Mono.fromRunnable(() -> publishEvent(error, publishResult, method, args))
-                        .then(Flux.error(error));
+                        .thenMany(Flux.error(error));
             }
             return Flux.error(error);
         });

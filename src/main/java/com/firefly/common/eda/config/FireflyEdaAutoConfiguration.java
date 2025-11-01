@@ -16,11 +16,15 @@
 
 package com.firefly.common.eda.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.firefly.common.eda.properties.EdaProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.annotation.Bean;
 
 /**
  * Main auto-configuration class for Firefly EDA library.
@@ -41,98 +45,129 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 @AutoConfiguration
 @ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(EdaProperties.class)
+@org.springframework.context.annotation.ComponentScan(basePackages = "com.firefly.common.eda")
+@org.springframework.scheduling.annotation.EnableAsync
+@org.springframework.context.annotation.EnableAspectJAutoProxy
 public class FireflyEdaAutoConfiguration {
 
     public FireflyEdaAutoConfiguration(EdaProperties props) {
-        log.info("╔════════════════════════════════════════════════════════════════════════════════╗");
-        log.info("║  🚀 FIREFLY EDA - EVENT-DRIVEN ARCHITECTURE LIBRARY                           ║");
-        log.info("╚════════════════════════════════════════════════════════════════════════════════╝");
+        log.info("================================================================================");
+        log.info("FIREFLY EDA - EVENT-DRIVEN ARCHITECTURE LIBRARY");
+        log.info("================================================================================");
         log.info("");
-        log.info("📋 Global Configuration Summary:");
-        log.info("   • EDA Library: {}", props.isEnabled() ? "✅ ENABLED" : "❌ DISABLED");
-        log.info("   • Publishers: {}", props.getPublishers().isEnabled() ? "✅ ENABLED" : "❌ DISABLED");
-        log.info("   • Consumers: {}", props.getConsumer().isEnabled() ? "✅ ENABLED" : "❌ DISABLED");
-        log.info("   • Default Publisher Type: {}", props.getDefaultPublisherType());
-        log.info("   • Default Serialization: {}", props.getDefaultSerializationFormat());
-        log.info("   • Consumer Group ID: {}", props.getConsumer().getGroupId());
-        log.info("   • Metrics: {}", props.isMetricsEnabled() ? "✅ ENABLED" : "❌ DISABLED");
-        log.info("   • Health Checks: {}", props.isHealthEnabled() ? "✅ ENABLED" : "❌ DISABLED");
-        log.info("   • Tracing: {}", props.isTracingEnabled() ? "✅ ENABLED" : "❌ DISABLED");
+        log.info("Global Configuration:");
+        log.info("  - EDA Library: {}", props.isEnabled() ? "ENABLED" : "DISABLED");
+        log.info("  - Publishers: {}", props.getPublishers().isEnabled() ? "ENABLED" : "DISABLED");
+        log.info("  - Consumers: {}", props.getConsumer().isEnabled() ? "ENABLED" : "DISABLED");
+        log.info("  - Default Publisher Type: {}", props.getDefaultPublisherType());
+        log.info("  - Default Serialization: {}", props.getDefaultSerializationFormat());
+        log.info("  - Consumer Group ID: {}", props.getConsumer().getGroupId());
+        log.info("  - Metrics: {}", props.isMetricsEnabled() ? "ENABLED" : "DISABLED");
+        log.info("  - Health Checks: {}", props.isHealthEnabled() ? "ENABLED" : "DISABLED");
+        log.info("  - Tracing: {}", props.isTracingEnabled() ? "ENABLED" : "DISABLED");
         log.info("");
-        
+
         // Log publisher details
+        log.info("Publishers Configuration:");
         if (props.getPublishers().isEnabled()) {
-            log.info("📤 Publishers Configuration:");
-            
             // Kafka Publisher
             var kafkaPublisher = props.getPublishers().getKafka().get("default");
             if (kafkaPublisher != null && kafkaPublisher.isEnabled()) {
                 String bootstrap = kafkaPublisher.getBootstrapServers();
-                log.info("   • Kafka Publisher: {} (bootstrap: {})", 
-                    bootstrap != null && !bootstrap.isEmpty() ? "✅ CONFIGURED" : "⚠️  NOT CONFIGURED",
-                    bootstrap != null && !bootstrap.isEmpty() ? bootstrap : "NOT SET");
+                if (bootstrap != null && !bootstrap.isEmpty()) {
+                    log.info("  - Kafka Publisher: CONFIGURED (bootstrap: {})", bootstrap);
+                } else {
+                    log.info("  - Kafka Publisher: NOT CONFIGURED (bootstrap servers not set)");
+                }
             } else {
-                log.info("   • Kafka Publisher: ❌ DISABLED");
+                log.info("  - Kafka Publisher: DISABLED");
             }
-            
+
             // RabbitMQ Publisher
             var rabbitPublisher = props.getPublishers().getRabbitmq().get("default");
             if (rabbitPublisher != null && rabbitPublisher.isEnabled()) {
-                log.info("   • RabbitMQ Publisher: ✅ CONFIGURED (host: {}:{})", 
-                    rabbitPublisher.getHost(), rabbitPublisher.getPort());
+                String host = rabbitPublisher.getHost();
+                if (host != null && !host.isEmpty()) {
+                    log.info("  - RabbitMQ Publisher: CONFIGURED (host: {}:{})",
+                        rabbitPublisher.getHost(), rabbitPublisher.getPort());
+                } else {
+                    log.info("  - RabbitMQ Publisher: NOT CONFIGURED (host not set)");
+                }
             } else {
-                log.info("   • RabbitMQ Publisher: ❌ DISABLED");
+                log.info("  - RabbitMQ Publisher: DISABLED");
             }
-            
+
             // Application Event Publisher
             if (props.getPublishers().getApplicationEvent().isEnabled()) {
-                log.info("   • Application Event Publisher: ✅ ENABLED");
+                log.info("  - Application Event Publisher: ENABLED");
             } else {
-                log.info("   • Application Event Publisher: ❌ DISABLED");
+                log.info("  - Application Event Publisher: DISABLED");
             }
         } else {
-            log.info("📤 Publishers: ❌ GLOBALLY DISABLED");
+            log.info("  - All Publishers: GLOBALLY DISABLED");
         }
-        
+
         log.info("");
-        
+
         // Log consumer details
+        log.info("Consumers Configuration:");
         if (props.getConsumer().isEnabled()) {
-            log.info("📥 Consumers Configuration:");
-            
             // Kafka Consumer
             var kafkaConsumer = props.getConsumer().getKafka().get("default");
             if (kafkaConsumer != null && kafkaConsumer.isEnabled()) {
                 String bootstrap = kafkaConsumer.getBootstrapServers();
-                log.info("   • Kafka Consumer: {} (bootstrap: {})", 
-                    bootstrap != null && !bootstrap.isEmpty() ? "✅ CONFIGURED" : "⚠️  NOT CONFIGURED",
-                    bootstrap != null && !bootstrap.isEmpty() ? bootstrap : "NOT SET");
+                if (bootstrap != null && !bootstrap.isEmpty()) {
+                    log.info("  - Kafka Consumer: CONFIGURED (bootstrap: {})", bootstrap);
+                } else {
+                    log.info("  - Kafka Consumer: NOT CONFIGURED (bootstrap servers not set)");
+                }
             } else {
-                log.info("   • Kafka Consumer: ❌ DISABLED");
+                log.info("  - Kafka Consumer: DISABLED");
             }
-            
+
             // RabbitMQ Consumer
             var rabbitConsumer = props.getConsumer().getRabbitmq().get("default");
             if (rabbitConsumer != null && rabbitConsumer.isEnabled()) {
-                log.info("   • RabbitMQ Consumer: ✅ CONFIGURED (host: {}:{})", 
-                    rabbitConsumer.getHost(), rabbitConsumer.getPort());
+                String host = rabbitConsumer.getHost();
+                if (host != null && !host.isEmpty()) {
+                    log.info("  - RabbitMQ Consumer: CONFIGURED (host: {}:{})",
+                        rabbitConsumer.getHost(), rabbitConsumer.getPort());
+                } else {
+                    log.info("  - RabbitMQ Consumer: NOT CONFIGURED (host not set)");
+                }
             } else {
-                log.info("   • RabbitMQ Consumer: ❌ DISABLED");
+                log.info("  - RabbitMQ Consumer: DISABLED");
             }
-            
+
             // Application Event Consumer
             if (props.getConsumer().getApplicationEvent().isEnabled()) {
-                log.info("   • Application Event Consumer: ✅ ENABLED");
+                log.info("  - Application Event Consumer: ENABLED");
             } else {
-                log.info("   • Application Event Consumer: ❌ DISABLED");
+                log.info("  - Application Event Consumer: DISABLED");
             }
         } else {
-            log.info("📥 Consumers: ❌ GLOBALLY DISABLED");
+            log.info("  - All Consumers: GLOBALLY DISABLED");
         }
-        
+
         log.info("");
-        log.info("🔍 Specific provider beans will be created based on above configuration");
-        log.info("════════════════════════════════════════════════════════════════════════════════");
+        log.info("Provider-specific beans will be created based on above configuration");
+        log.info("================================================================================");
+    }
+
+    /**
+     * Provides a default ObjectMapper configured for EDA serialization.
+     * <p>
+     * This bean is only created if no other ObjectMapper bean exists in the context.
+     * It includes JavaTimeModule for proper Java 8 date/time serialization.
+     *
+     * @return configured ObjectMapper instance
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.registerModule(new JavaTimeModule());
+        return mapper;
     }
 }
 

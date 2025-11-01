@@ -55,10 +55,21 @@ import java.util.Map;
 @ConditionalOnBean(EdaProperties.class)
 public class FireflyEdaKafkaConsumerAutoConfiguration {
 
-    public FireflyEdaKafkaConsumerAutoConfiguration() {
-        log.info("╔════════════════════════════════════════════════════════════════════════════════╗");
-        log.info("║  📥 FIREFLY EDA KAFKA CONSUMER AUTO-CONFIGURATION - STARTING                  ║");
-        log.info("╚════════════════════════════════════════════════════════════════════════════════╝");
+    public FireflyEdaKafkaConsumerAutoConfiguration(EdaProperties props) {
+        // Only log if consumers are enabled and Kafka is configured
+        if (props.getConsumer().isEnabled()) {
+            var kafkaConsumer = props.getConsumer().getKafka().get("default");
+            if (kafkaConsumer != null && kafkaConsumer.isEnabled() &&
+                kafkaConsumer.getBootstrapServers() != null && !kafkaConsumer.getBootstrapServers().isEmpty()) {
+                log.info("--------------------------------------------------------------------------------");
+                log.info("FIREFLY EDA KAFKA CONSUMER - INITIALIZING");
+                log.info("--------------------------------------------------------------------------------");
+            } else {
+                log.debug("Firefly EDA Kafka Consumer auto-configuration loaded but not creating beans (disabled or not configured)");
+            }
+        } else {
+            log.debug("Firefly EDA Kafka Consumer auto-configuration loaded but not creating beans (consumers globally disabled)");
+        }
     }
 
     /**
@@ -73,9 +84,9 @@ public class FireflyEdaKafkaConsumerAutoConfiguration {
     @Bean(name = "fireflyEdaKafkaConsumerFactory")
     @Primary
     @ConditionalOnMissingBean(name = "fireflyEdaKafkaConsumerFactory")
-    @ConditionalOnExpression("${firefly.eda.consumer.enabled:true} && ${firefly.eda.consumer.kafka.default.enabled:true} && '${firefly.eda.consumer.kafka.default.bootstrap-servers:}'.length() > 0")
+    @ConditionalOnExpression("${firefly.eda.consumer.enabled:false} && ${firefly.eda.consumer.kafka.default.enabled:true} && '${firefly.eda.consumer.kafka.default.bootstrap-servers:}'.length() > 0")
     public ConsumerFactory<String, Object> fireflyEdaKafkaConsumerFactory(EdaProperties props) {
-        log.info("🔧 Creating Firefly EDA Kafka ConsumerFactory from firefly.eda.consumer.kafka.default.* properties");
+        log.info("Creating Kafka ConsumerFactory from firefly.eda.consumer.kafka.default.* properties");
 
         EdaProperties.Consumer.KafkaConfig kafkaProps = props.getConsumer().getKafka().get("default");
 
@@ -85,9 +96,9 @@ public class FireflyEdaKafkaConsumerAutoConfiguration {
         configProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, kafkaProps.getAutoOffsetReset() != null ?
             kafkaProps.getAutoOffsetReset() : "earliest");
 
-        log.info("   📍 Bootstrap servers: {}", kafkaProps.getBootstrapServers());
-        log.info("   👥 Consumer group ID: {}", props.getConsumer().getGroupId());
-        log.info("   ⏮️  Auto offset reset: {}", kafkaProps.getAutoOffsetReset() != null ? kafkaProps.getAutoOffsetReset() : "earliest");
+        log.info("  - Bootstrap servers: {}", kafkaProps.getBootstrapServers());
+        log.info("  - Consumer group ID: {}", props.getConsumer().getGroupId());
+        log.info("  - Auto offset reset: {}", kafkaProps.getAutoOffsetReset() != null ? kafkaProps.getAutoOffsetReset() : "earliest");
 
         // Set deserializers
         String keyDeserializer = kafkaProps.getKeyDeserializer() != null ?
@@ -97,17 +108,17 @@ public class FireflyEdaKafkaConsumerAutoConfiguration {
 
         configProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer);
         configProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer);
-        log.info("   🔑 Key deserializer: {}", keyDeserializer);
-        log.info("   📦 Value deserializer: {}", valueDeserializer);
+        log.info("  - Key deserializer: {}", keyDeserializer);
+        log.info("  - Value deserializer: {}", valueDeserializer);
 
         // Add any additional properties
         if (kafkaProps.getProperties() != null && !kafkaProps.getProperties().isEmpty()) {
-            log.info("   ⚙️  Additional properties: {}", kafkaProps.getProperties().keySet());
+            log.info("  - Additional properties: {}", kafkaProps.getProperties().keySet());
             configProps.putAll(kafkaProps.getProperties());
         }
 
         DefaultKafkaConsumerFactory<String, Object> factory = new DefaultKafkaConsumerFactory<>(configProps);
-        log.info("✅ Firefly EDA Kafka ConsumerFactory created successfully");
+        log.info("Kafka ConsumerFactory created successfully");
         return factory;
     }
 
@@ -125,11 +136,12 @@ public class FireflyEdaKafkaConsumerAutoConfiguration {
     @ConditionalOnBean(name = "fireflyEdaKafkaConsumerFactory")
     public ConcurrentKafkaListenerContainerFactory<String, Object> fireflyEdaKafkaListenerContainerFactory(
             ConsumerFactory<String, Object> fireflyEdaKafkaConsumerFactory) {
-        log.info("🔧 Creating Firefly EDA Kafka listener container factory from fireflyEdaKafkaConsumerFactory");
+        log.info("Creating Kafka listener container factory from fireflyEdaKafkaConsumerFactory");
         ConcurrentKafkaListenerContainerFactory<String, Object> factory =
             new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(fireflyEdaKafkaConsumerFactory);
-        log.info("✅ Firefly EDA Kafka listener container factory created successfully");
+        log.info("Kafka Consumer infrastructure created successfully");
+        log.info("--------------------------------------------------------------------------------");
         return factory;
     }
 }

@@ -54,10 +54,21 @@ import java.util.Map;
 @ConditionalOnBean(EdaProperties.class)
 public class FireflyEdaKafkaPublisherAutoConfiguration {
 
-    public FireflyEdaKafkaPublisherAutoConfiguration() {
-        log.info("╔════════════════════════════════════════════════════════════════════════════════╗");
-        log.info("║  📤 FIREFLY EDA KAFKA PUBLISHER AUTO-CONFIGURATION - STARTING                 ║");
-        log.info("╚════════════════════════════════════════════════════════════════════════════════╝");
+    public FireflyEdaKafkaPublisherAutoConfiguration(EdaProperties props) {
+        // Only log if publishers are enabled and Kafka is configured
+        if (props.getPublishers().isEnabled()) {
+            var kafkaPublisher = props.getPublishers().getKafka().get("default");
+            if (kafkaPublisher != null && kafkaPublisher.isEnabled() &&
+                kafkaPublisher.getBootstrapServers() != null && !kafkaPublisher.getBootstrapServers().isEmpty()) {
+                log.info("--------------------------------------------------------------------------------");
+                log.info("FIREFLY EDA KAFKA PUBLISHER - INITIALIZING");
+                log.info("--------------------------------------------------------------------------------");
+            } else {
+                log.debug("Firefly EDA Kafka Publisher auto-configuration loaded but not creating beans (disabled or not configured)");
+            }
+        } else {
+            log.debug("Firefly EDA Kafka Publisher auto-configuration loaded but not creating beans (publishers globally disabled)");
+        }
     }
 
     /**
@@ -71,15 +82,15 @@ public class FireflyEdaKafkaPublisherAutoConfiguration {
      */
     @Bean(name = "fireflyEdaKafkaProducerFactory")
     @ConditionalOnMissingBean(name = "fireflyEdaKafkaProducerFactory")
-    @ConditionalOnExpression("${firefly.eda.publishers.enabled:true} && ${firefly.eda.publishers.kafka.default.enabled:true} && '${firefly.eda.publishers.kafka.default.bootstrap-servers:}'.length() > 0")
+    @ConditionalOnExpression("${firefly.eda.publishers.enabled:false} && ${firefly.eda.publishers.kafka.default.enabled:true} && '${firefly.eda.publishers.kafka.default.bootstrap-servers:}'.length() > 0")
     public ProducerFactory<String, Object> fireflyEdaKafkaProducerFactory(EdaProperties props) {
-        log.info("🔧 Creating Firefly EDA Kafka ProducerFactory from firefly.eda.publishers.kafka.default.* properties");
+        log.info("Creating Kafka ProducerFactory from firefly.eda.publishers.kafka.default.* properties");
 
         EdaProperties.Publishers.KafkaConfig kafkaProps = props.getPublishers().getKafka().get("default");
 
         Map<String, Object> configProps = new HashMap<>();
         configProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaProps.getBootstrapServers());
-        log.info("   📍 Bootstrap servers: {}", kafkaProps.getBootstrapServers());
+        log.info("  - Bootstrap servers: {}", kafkaProps.getBootstrapServers());
 
         // Set serializers
         String keySerializer = kafkaProps.getKeySerializer() != null ?
@@ -89,17 +100,17 @@ public class FireflyEdaKafkaPublisherAutoConfiguration {
 
         configProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, keySerializer);
         configProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, valueSerializer);
-        log.info("   🔑 Key serializer: {}", keySerializer);
-        log.info("   📦 Value serializer: {}", valueSerializer);
+        log.info("  - Key serializer: {}", keySerializer);
+        log.info("  - Value serializer: {}", valueSerializer);
 
         // Add any additional properties
         if (kafkaProps.getProperties() != null && !kafkaProps.getProperties().isEmpty()) {
-            log.info("   ⚙️  Additional properties: {}", kafkaProps.getProperties().keySet());
+            log.info("  - Additional properties: {}", kafkaProps.getProperties().keySet());
             configProps.putAll(kafkaProps.getProperties());
         }
 
         DefaultKafkaProducerFactory<String, Object> factory = new DefaultKafkaProducerFactory<>(configProps);
-        log.info("✅ Firefly EDA Kafka ProducerFactory created successfully");
+        log.info("Kafka ProducerFactory created successfully");
         return factory;
     }
 
@@ -115,9 +126,10 @@ public class FireflyEdaKafkaPublisherAutoConfiguration {
     @ConditionalOnMissingBean(name = "fireflyEdaKafkaTemplate")
     @ConditionalOnBean(name = "fireflyEdaKafkaProducerFactory")
     public KafkaTemplate<String, Object> fireflyEdaKafkaTemplate(ProducerFactory<String, Object> fireflyEdaKafkaProducerFactory) {
-        log.info("🔧 Creating Firefly EDA KafkaTemplate from fireflyEdaKafkaProducerFactory");
+        log.info("Creating KafkaTemplate from fireflyEdaKafkaProducerFactory");
         KafkaTemplate<String, Object> template = new KafkaTemplate<>(fireflyEdaKafkaProducerFactory);
-        log.info("✅ Firefly EDA KafkaTemplate created successfully");
+        log.info("Kafka Publisher infrastructure created successfully");
+        log.info("--------------------------------------------------------------------------------");
         return template;
     }
 }

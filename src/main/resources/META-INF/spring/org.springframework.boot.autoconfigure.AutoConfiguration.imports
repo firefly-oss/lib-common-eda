@@ -1,3 +1,5 @@
-com.firefly.common.eda.config.EdaAutoConfiguration
-com.firefly.common.eda.config.EdaRabbitTemplateAutoConfiguration
-com.firefly.common.eda.config.EdaAmqpAdminAutoConfiguration
+com.firefly.common.eda.config.FireflyEdaAutoConfiguration
+com.firefly.common.eda.config.FireflyEdaKafkaPublisherAutoConfiguration
+com.firefly.common.eda.config.FireflyEdaKafkaConsumerAutoConfiguration
+com.firefly.common.eda.config.FireflyEdaRabbitMqAutoConfiguration
+com.firefly.common.eda.config.FireflyEdaAmqpAdminAutoConfiguration
