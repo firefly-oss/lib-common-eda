@@ -2,6 +2,19 @@
 
 Complete API reference for the Firefly Event Driven Architecture Library.
 
+---
+
+## ⚠️ Configuration Namespace Warning
+
+**This library follows hexagonal architecture principles.**
+
+✅ **ALWAYS use `firefly.eda.*` configuration properties**
+❌ **NEVER use `spring.kafka.*` or `spring.rabbitmq.*` properties**
+
+The library provides complete abstraction from messaging platform implementations. All provider-specific configurations are managed internally. See [Configuration Reference](CONFIGURATION.md) for details.
+
+---
+
 ## Table of Contents
 
 - [Core Interfaces](#core-interfaces)

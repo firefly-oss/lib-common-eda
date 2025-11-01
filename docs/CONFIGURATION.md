@@ -2,6 +2,69 @@
 
 This document provides a comprehensive reference for all configuration options available in the Firefly EDA Library.
 
+---
+
+## ⚠️ CRITICAL - Hexagonal Architecture Configuration Principle
+
+**This library follows hexagonal architecture (ports and adapters) principles.**
+
+### Configuration Namespace Rules
+
+✅ **ALWAYS use `firefly.eda.*` properties exclusively**
+
+❌ **NEVER use Spring-specific properties:**
+- `spring.kafka.*` - Will be **IGNORED**
+- `spring.rabbitmq.*` - Will be **IGNORED**
+- `spring.amqp.*` - Will be **IGNORED**
+
+### Why This Matters
+
+The library provides **complete abstraction** from messaging platform implementations. All provider-specific configurations are managed internally by the library's auto-configuration classes. This ensures:
+
+1. **Portability**: Switch between Kafka, RabbitMQ, or other providers without changing application code
+2. **Consistency**: Unified configuration structure across all messaging platforms
+3. **Maintainability**: Single source of truth for all EDA-related configuration
+4. **Testability**: Easy to mock and test without provider-specific dependencies
+
+### Correct Configuration Examples
+
+✅ **Correct - Kafka:**
+```yaml
+firefly:
+  eda:
+    publishers:
+      kafka:
+        default:
+          bootstrap-servers: localhost:9092
+```
+
+❌ **Incorrect - Will be IGNORED:**
+```yaml
+spring:
+  kafka:
+    bootstrap-servers: localhost:9092  # ❌ IGNORED!
+```
+
+✅ **Correct - RabbitMQ:**
+```yaml
+firefly:
+  eda:
+    publishers:
+      rabbitmq:
+        default:
+          host: localhost
+          port: 5672
+```
+
+❌ **Incorrect - Will be IGNORED:**
+```yaml
+spring:
+  rabbitmq:
+    host: localhost  # ❌ IGNORED!
+```
+
+---
+
 ## Table of Contents
 
 - [Basic Configuration](#basic-configuration)

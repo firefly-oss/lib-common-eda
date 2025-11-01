@@ -2,6 +2,19 @@
 
 This guide will help you get started with the Firefly Event Driven Architecture Library in under 15 minutes.
 
+---
+
+## ⚠️ IMPORTANT - Configuration Principle
+
+**This library follows hexagonal architecture.**
+
+✅ **ALWAYS configure using `firefly.eda.*` properties**
+❌ **NEVER use `spring.kafka.*` or `spring.rabbitmq.*` properties**
+
+The library manages all provider-specific configurations internally, ensuring complete abstraction from messaging platforms.
+
+---
+
 ## Table of Contents
 
 - [Prerequisites](#prerequisites)
@@ -115,15 +128,20 @@ firefly:
       kafka:
         default:
           enabled: true
-          bootstrap-servers: localhost:9092
+          bootstrap-servers: localhost:9092  # ✅ CORRECT - firefly.eda namespace
           default-topic: events
     consumer:
       enabled: true
       group-id: my-app
       kafka:
         default:
-          bootstrap-servers: localhost:9092
+          bootstrap-servers: localhost:9092  # ✅ CORRECT - firefly.eda namespace
           topics: events
+
+# ❌ DO NOT USE - These will be IGNORED:
+# spring:
+#   kafka:
+#     bootstrap-servers: localhost:9092  # ❌ IGNORED!
 ```
 
 ### Option C: RabbitMQ
@@ -145,11 +163,17 @@ firefly:
       rabbitmq:
         default:
           enabled: true
-          host: localhost
+          host: localhost  # ✅ CORRECT - firefly.eda namespace
           port: 5672
           username: guest
           password: guest
           default-exchange: events
+
+# ❌ DO NOT USE - These will be IGNORED:
+# spring:
+#   rabbitmq:
+#     host: localhost  # ❌ IGNORED!
+#     port: 5672       # ❌ IGNORED!
 ```
 
 ## Step 3: Publishing Events

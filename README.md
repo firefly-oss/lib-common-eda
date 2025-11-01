@@ -113,6 +113,13 @@ The Firefly Event Driven Architecture (EDA) Library is a comprehensive, producti
 
 ### 2. Configure Properties
 
+> **⚠️ IMPORTANT - Hexagonal Architecture Principle:**
+>
+> **ALWAYS use `firefly.eda.*` properties exclusively.** NEVER configure Spring-specific properties like `spring.kafka.*` or `spring.rabbitmq.*` directly. The library follows hexagonal architecture principles and manages all provider-specific configurations internally.
+>
+> ✅ **Correct:** `firefly.eda.publishers.kafka.default.bootstrap-servers`
+> ❌ **Incorrect:** `spring.kafka.bootstrap-servers`
+
 ```yaml
 firefly:
   eda:
@@ -237,6 +244,20 @@ The library follows a layered architecture with clear separation of concerns:
 
 ## Configuration
 
+> **⚠️ CRITICAL - Configuration Namespace:**
+>
+> This library follows **hexagonal architecture** principles. ALL configuration MUST be under the `firefly.eda.*` namespace.
+>
+> **DO NOT use provider-specific Spring properties:**
+> - ❌ `spring.kafka.*` - Will be IGNORED
+> - ❌ `spring.rabbitmq.*` - Will be IGNORED
+> - ✅ `firefly.eda.publishers.kafka.*` - CORRECT
+> - ✅ `firefly.eda.publishers.rabbitmq.*` - CORRECT
+> - ✅ `firefly.eda.consumer.kafka.*` - CORRECT
+> - ✅ `firefly.eda.consumer.rabbitmq.*` - CORRECT
+>
+> The library internally manages all provider-specific configurations, ensuring complete abstraction from messaging platform implementations.
+
 ### Basic Configuration
 
 ```yaml
@@ -252,6 +273,10 @@ firefly:
 
 ### Publisher Configuration
 
+> **💡 Advanced Provider-Specific Properties:**
+>
+> Use the `properties` map to pass advanced provider-specific settings (e.g., Kafka's `acks`, `retries`, `compression.type`). The library will forward these to the underlying provider while maintaining abstraction.
+
 ```yaml
 firefly:
   eda:
@@ -261,10 +286,13 @@ firefly:
           enabled: true
           bootstrap-servers: localhost:9092
           default-topic: events
+          # Advanced Kafka-specific properties via the properties map
           properties:
             acks: all
             retries: 3
-      
+            compression.type: gzip
+            max.in.flight.requests.per.connection: 5
+
       rabbitmq:
         default:
           enabled: true
@@ -283,6 +311,10 @@ firefly:
 
 ### Consumer Configuration
 
+> **💡 Consumer-Specific Advanced Properties:**
+>
+> Like publishers, consumers also support the `properties` map for advanced provider-specific settings (e.g., Kafka's `fetch.max.wait.ms`, `metadata.max.age.ms`).
+
 ```yaml
 firefly:
   eda:
@@ -298,6 +330,11 @@ firefly:
           bootstrap-servers: localhost:9092
           topics: events
           auto-offset-reset: earliest
+          # Advanced Kafka consumer properties via the properties map
+          properties:
+            fetch.max.wait.ms: 500
+            metadata.max.age.ms: 300000
+            max.poll.records: 500
 
       # RabbitMQ consumer
       rabbitmq:
