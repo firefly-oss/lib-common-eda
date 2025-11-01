@@ -199,7 +199,7 @@ public class EdaProperties {
 
         @Data
         public static class KafkaConfig {
-            private boolean enabled = true;
+            private boolean enabled = false;
             private String bootstrapServers;
             private String defaultTopic = "events";
             private String keySerializer = "org.apache.kafka.common.serialization.StringSerializer";
@@ -209,7 +209,7 @@ public class EdaProperties {
 
         @Data
         public static class RabbitMqConfig {
-            private boolean enabled = true;
+            private boolean enabled = false;
             private String host = "localhost";
             private int port = 5672;
             private String username = "guest";
@@ -292,7 +292,7 @@ public class EdaProperties {
 
         @Data
         public static class KafkaConfig {
-            private boolean enabled = true;
+            private boolean enabled = false;
             private String bootstrapServers;
             private String topics = "events";
             private String autoOffsetReset = "earliest";
@@ -303,7 +303,7 @@ public class EdaProperties {
 
         @Data
         public static class RabbitMqConfig {
-            private boolean enabled = true;
+            private boolean enabled = false;
             private String host = "localhost";
             private int port = 5672;
             private String username = "guest";
