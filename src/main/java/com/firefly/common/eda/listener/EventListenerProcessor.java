@@ -22,9 +22,11 @@ import com.firefly.common.eda.annotation.PublisherType;
 import com.firefly.common.eda.error.CustomErrorHandlerRegistry;
 import com.firefly.common.eda.event.EventEnvelope;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.InitializingBean;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.context.ApplicationListener;
+import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -38,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Processor for handling events consumed from messaging platforms.
@@ -50,16 +53,17 @@ import java.util.concurrent.ConcurrentHashMap;
  * Spring's ApplicationEventPublisher for dead letter queue functionality
  * instead of directly depending on EventPublisherFactory.
  * <p>
- * Uses InitializingBean to initialize event listeners early in the bean lifecycle,
- * before other beans (like KafkaEventConsumer) need to query the discovered listeners.
+ * Uses {@code ApplicationListener<ContextRefreshedEvent>} to initialize event listeners
+ * after all beans are fully initialized, avoiding circular reference issues.
  */
 @Component
 @Slf4j
-public class EventListenerProcessor implements InitializingBean {
+public class EventListenerProcessor implements ApplicationListener<ContextRefreshedEvent>, DynamicEventListenerRegistry {
 
     private final ApplicationContext applicationContext;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final CustomErrorHandlerRegistry customErrorHandlerRegistry;
+    private final Environment environment;
 
     // Cache of event type to list of listener methods
     private final Map<Class<?>, List<EventListenerMethod>> listenerCache = new ConcurrentHashMap<>();
@@ -68,23 +72,36 @@ public class EventListenerProcessor implements InitializingBean {
     // Cache for retry attempts per event
     private final Map<String, Integer> retryAttempts = new ConcurrentHashMap<>();
 
+    // Dynamic listeners registered programmatically
+    private final Map<String, DynamicListenerHolder> dynamicListeners = new ConcurrentHashMap<>();
+
+    // Callbacks to notify when listeners are registered/unregistered
+    private final List<Runnable> listenerChangeCallbacks = new ArrayList<>();
+
+    // Flag to ensure initialization happens only once
+    private final AtomicBoolean initialized = new AtomicBoolean(false);
+
     public EventListenerProcessor(ApplicationContext applicationContext,
                                 ApplicationEventPublisher applicationEventPublisher,
-                                CustomErrorHandlerRegistry customErrorHandlerRegistry) {
+                                CustomErrorHandlerRegistry customErrorHandlerRegistry,
+                                Environment environment) {
         this.applicationContext = applicationContext;
         this.applicationEventPublisher = applicationEventPublisher;
         this.customErrorHandlerRegistry = customErrorHandlerRegistry;
+        this.environment = environment;
     }
 
     /**
-     * Initialize event listeners after bean properties have been set.
-     * This implementation of InitializingBean ensures that event listeners are discovered
-     * early in the bean lifecycle, before other beans (like KafkaEventConsumer) need to
-     * query the discovered listeners.
+     * Initialize event listeners after the application context has been refreshed.
+     * This ensures all beans are fully initialized before we try to discover listeners,
+     * avoiding circular reference issues.
      */
     @Override
-    public void afterPropertiesSet() {
-        initializeEventListeners();
+    public void onApplicationEvent(ContextRefreshedEvent event) {
+        // Only initialize once, even if multiple ContextRefreshedEvents are fired
+        if (initialized.compareAndSet(false, true)) {
+            initializeEventListeners();
+        }
     }
 
     /**
@@ -189,26 +206,41 @@ public class EventListenerProcessor implements InitializingBean {
 
     /**
      * Discovers all methods annotated with @EventListener in the application context.
+     * This method is called after the context is fully refreshed, so all beans should be available.
      */
     private void discoverEventListeners() {
         String[] beanNames = applicationContext.getBeanDefinitionNames();
-        
+        int discoveredCount = 0;
+
         for (String beanName : beanNames) {
             try {
+                // Skip internal Spring beans and infrastructure beans
+                if (beanName.startsWith("org.springframework") ||
+                    beanName.startsWith("spring.") ||
+                    beanName.contains("InternalConfigurationAnnotationProcessor")) {
+                    continue;
+                }
+
                 Object bean = applicationContext.getBean(beanName);
                 Class<?> beanClass = bean.getClass();
-                
+
                 // Check all methods for @EventListener annotation
                 for (Method method : beanClass.getDeclaredMethods()) {
                     EventListener annotation = method.getAnnotation(EventListener.class);
                     if (annotation != null) {
                         registerEventListener(bean, method, annotation);
+                        discoveredCount++;
                     }
                 }
+            } catch (org.springframework.beans.factory.BeanCreationException e) {
+                // This should not happen after ContextRefreshedEvent, but log it just in case
+                log.debug("Skipping bean '{}' - still in creation: {}", beanName, e.getMessage());
             } catch (Exception e) {
-                log.warn("Error processing bean '{}' for event listeners: {}", beanName, e.getMessage());
+                log.debug("Skipping bean '{}' for event listener discovery: {}", beanName, e.getMessage());
             }
         }
+
+        log.debug("Discovered {} event listener methods across {} beans", discoveredCount, beanNames.length);
     }
 
     /**
@@ -247,9 +279,18 @@ public class EventListenerProcessor implements InitializingBean {
             // Register by destinations
             String[] topics = annotation.destinations();
             for (String topic : topics) {
-                topicListenerCache.computeIfAbsent(topic, k -> new ArrayList<>()).add(listenerMethod);
-                log.debug("Registered event listener: {}.{} for topic: {}", 
-                        bean.getClass().getSimpleName(), method.getName(), topic);
+                // Resolve Spring property placeholders
+                String resolvedTopic = environment.resolvePlaceholders(topic);
+                
+                // Skip empty or unresolved placeholders
+                if (resolvedTopic.isEmpty() || resolvedTopic.startsWith("${")) {
+                    log.debug("Skipping empty or unresolved topic placeholder: {}", topic);
+                    continue;
+                }
+                
+                topicListenerCache.computeIfAbsent(resolvedTopic, k -> new ArrayList<>()).add(listenerMethod);
+                log.debug("Registered event listener: {}.{} for topic: {} (resolved from: {})", 
+                        bean.getClass().getSimpleName(), method.getName(), resolvedTopic, topic);
             }
             
         } catch (Exception e) {
@@ -623,6 +664,192 @@ public class EventListenerProcessor implements InitializingBean {
         return "dead-letter-queue";
     }
 
+    // ==================== DynamicEventListenerRegistry Implementation ====================
+    
+    @Override
+    public void registerListener(
+            String listenerId,
+            String destination,
+            PublisherType consumerType,
+            java.util.function.BiFunction<Object, Map<String, Object>, Mono<Void>> handler) {
+        registerListener(listenerId, destination, new String[0], consumerType, handler);
+    }
+
+    @Override
+    public void registerListener(
+            String listenerId,
+            String destination,
+            String[] eventTypes,
+            PublisherType consumerType,
+            java.util.function.BiFunction<Object, Map<String, Object>, Mono<Void>> handler) {
+        
+        log.info("Registering dynamic listener: id={}, destination={}, consumerType={}, eventTypes={}",
+                listenerId, destination, consumerType, java.util.Arrays.toString(eventTypes));
+        
+        // Create holder for this dynamic listener
+        DynamicListenerHolder holder = new DynamicListenerHolder(
+                listenerId, destination, eventTypes, consumerType, handler);
+        
+        dynamicListeners.put(listenerId, holder);
+        
+        // Register in topic cache so consumers can discover it
+        topicListenerCache.computeIfAbsent(destination, k -> new ArrayList<>())
+                .add(holder.toEventListenerMethod());
+        
+        log.info("Dynamic listener registered successfully: {}", listenerId);
+        
+        // Notify consumers that a new listener has been registered
+        notifyListenerChange();
+    }
+
+    @Override
+    public void unregisterListener(String listenerId) {
+        log.info("Unregistering dynamic listener: {}", listenerId);
+        
+        DynamicListenerHolder holder = dynamicListeners.remove(listenerId);
+        if (holder != null) {
+            // Remove from topic cache
+            List<EventListenerMethod> listeners = topicListenerCache.get(holder.destination);
+            if (listeners != null) {
+                listeners.removeIf(l -> l.getBean() == holder);
+            }
+            log.info("Dynamic listener unregistered: {}", listenerId);
+            // Notify consumers that a listener has been removed
+            notifyListenerChange();
+        } else {
+            log.warn("Attempted to unregister unknown listener: {}", listenerId);
+        }
+    }
+
+    @Override
+    public boolean isListenerRegistered(String listenerId) {
+        return dynamicListeners.containsKey(listenerId);
+    }
+
+    @Override
+    public String[] getRegisteredListenerIds() {
+        return dynamicListeners.keySet().toArray(new String[0]);
+    }
+    
+    /**
+     * Registers a callback to be notified when listeners are added or removed.
+     * This allows consumers to refresh their topic subscriptions dynamically.
+     *
+     * @param callback the callback to invoke on listener changes
+     */
+    public void registerListenerChangeCallback(Runnable callback) {
+        listenerChangeCallbacks.add(callback);
+        log.debug("Registered listener change callback");
+    }
+    
+    /**
+     * Notifies all registered callbacks that listeners have changed.
+     */
+    private void notifyListenerChange() {
+        log.debug("Notifying {} callbacks of listener change", listenerChangeCallbacks.size());
+        listenerChangeCallbacks.forEach(callback -> {
+            try {
+                callback.run();
+            } catch (Exception e) {
+                log.error("Error in listener change callback", e);
+            }
+        });
+    }
+    
+    /**
+     * Holder for dynamically registered listeners.
+     */
+    private static class DynamicListenerHolder {
+        private final String listenerId;
+        private final String destination;
+        private final String[] eventTypes;
+        private final PublisherType consumerType;
+        private final java.util.function.BiFunction<Object, Map<String, Object>, Mono<Void>> handler;
+        
+        public DynamicListenerHolder(
+                String listenerId,
+                String destination,
+                String[] eventTypes,
+                PublisherType consumerType,
+                java.util.function.BiFunction<Object, Map<String, Object>, Mono<Void>> handler) {
+            this.listenerId = listenerId;
+            this.destination = destination;
+            this.eventTypes = eventTypes;
+            this.consumerType = consumerType;
+            this.handler = handler;
+        }
+        
+        /**
+         * Converts this dynamic listener to an EventListenerMethod for compatibility.
+         */
+        public EventListenerMethod toEventListenerMethod() {
+            // Create a synthetic EventListener annotation
+            EventListener annotation = new EventListener() {
+                @Override
+                public Class<? extends java.lang.annotation.Annotation> annotationType() {
+                    return EventListener.class;
+                }
+                
+                @Override
+                public String[] destinations() { return new String[]{destination}; }
+                
+                @Override
+                public String[] eventTypes() { return eventTypes; }
+                
+                @Override
+                public PublisherType consumerType() { return consumerType; }
+                
+                @Override
+                public String connectionId() { return "default"; }
+                
+                @Override
+                public com.firefly.common.eda.annotation.ErrorHandlingStrategy errorStrategy() {
+                    return com.firefly.common.eda.annotation.ErrorHandlingStrategy.LOG_AND_CONTINUE;
+                }
+                
+                @Override
+                public int maxRetries() { return 3; }
+                
+                @Override
+                public long retryDelayMs() { return 1000; }
+                
+                @Override
+                public boolean autoAck() { return true; }
+                
+                @Override
+                public String groupId() { return ""; }
+                
+                @Override
+                public String condition() { return ""; }
+                
+                @Override
+                public int priority() { return 0; }
+                
+                @Override
+                public boolean async() { return true; }
+                
+                @Override
+                public long timeoutMs() { return 0; }
+            };
+            
+            // Create a synthetic method
+            try {
+                Method method = DynamicListenerHolder.class.getDeclaredMethod("handleEvent", Object.class, Map.class);
+                return new EventListenerMethod(this, method, annotation);
+            } catch (NoSuchMethodException e) {
+                throw new RuntimeException("Failed to create synthetic method", e);
+            }
+        }
+        
+        /**
+         * Handler method that will be invoked by reflection.
+         */
+        @SuppressWarnings("unused")
+        public Mono<Void> handleEvent(Object event, Map<String, Object> headers) {
+            return handler.apply(event, headers);
+        }
+    }
+    
     /**
      * Inner class to hold event listener method metadata.
      */
