@@ -21,10 +21,12 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.firefly.common.eda.properties.EdaProperties;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.AutoConfigureOrder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.core.Ordered;
 
 /**
  * Main auto-configuration class for Firefly EDA library.
@@ -43,6 +45,7 @@ import org.springframework.context.annotation.Bean;
  */
 @Slf4j
 @AutoConfiguration
+@AutoConfigureOrder(Ordered.HIGHEST_PRECEDENCE)
 @ConditionalOnProperty(prefix = "firefly.eda", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(EdaProperties.class)
 @org.springframework.context.annotation.ComponentScan(basePackages = "com.firefly.common.eda")
