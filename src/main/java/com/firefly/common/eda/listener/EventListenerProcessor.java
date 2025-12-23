@@ -22,6 +22,7 @@ import com.firefly.common.eda.annotation.PublisherType;
 import com.firefly.common.eda.error.CustomErrorHandlerRegistry;
 import com.firefly.common.eda.event.EventEnvelope;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationListener;
@@ -64,6 +65,10 @@ public class EventListenerProcessor implements ApplicationListener<ContextRefres
     private final ApplicationEventPublisher applicationEventPublisher;
     private final CustomErrorHandlerRegistry customErrorHandlerRegistry;
     private final Environment environment;
+
+    // Optional deduplication service
+    @Autowired(required = false)
+    private com.firefly.common.eda.dedup.DeduplicationService deduplicationService;
 
     // Cache of event type to list of listener methods
     private final Map<Class<?>, List<EventListenerMethod>> listenerCache = new ConcurrentHashMap<>();
@@ -167,16 +172,31 @@ public class EventListenerProcessor implements ApplicationListener<ContextRefres
             return Mono.empty();
         }
 
+        // If deduplication is available, guard processing with it
+        if (deduplicationService != null) {
+            return deduplicationService.tryAcquire(event, headers)
+                    .flatMap(allowed -> allowed ? doProcessEvent(event, headers) : Mono.empty());
+        }
+
+        return doProcessEvent(event, headers);
+    }
+
+    // Visible for tests
+    void setDeduplicationService(com.firefly.common.eda.dedup.DeduplicationService service) {
+        this.deduplicationService = service;
+    }
+
+    private Mono<Void> doProcessEvent(Object event, Map<String, Object> headers) {
         // Listeners are already discovered during @PostConstruct
 
         log.debug("Processing event: {} with headers: {}", event.getClass().getSimpleName(), headers);
 
         // Find listeners by event type
         List<EventListenerMethod> typeListeners = findListenersByType(event.getClass());
-        
+
         // Find listeners by topic/destination (from headers)
         List<EventListenerMethod> topicListeners = findListenersByTopic(headers);
-        
+
         // Combine and deduplicate listeners
         List<EventListenerMethod> combinedListeners = new ArrayList<>(typeListeners);
         topicListeners.stream()

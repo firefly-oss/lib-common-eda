@@ -320,6 +320,30 @@ public class EdaProperties {
         public static class Noop {
             private boolean enabled = false;
         }
+
+        /**
+         * Deduplication configuration for consumers to avoid processing the same event twice.
+         */
+        @Valid
+        private final Dedup dedup = new Dedup();
+
+        @Data
+        public static class Dedup {
+            /**
+             * Enable/disable deduplication guard before invoking listeners.
+             */
+            private boolean enabled = false;
+
+            /**
+             * Time-to-live for processed event keys stored in cache.
+             */
+            private Duration ttl = Duration.ofMinutes(10);
+
+            /**
+             * Key prefix to use in cache entries.
+             */
+            private String keyPrefix = "eda:dedup:";
+        }
     }
 
     /**
